@@ -1,0 +1,72 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  outline: 0 !important;
+  -webkit-appearance: none;
+}
+ul[class],
+ol[class] {
+  padding: 0;
+}
+body {
+  min-height: 100vh;
+  scroll-behavior: smooth;
+  text-rendering: optimizeSpeed;
+  font-family: "Geologica", sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  color: #fff;
+  background: #2C2C2C;
+  margin: 0;
+}
+a {
+  text-decoration: none !important;
+  color: #fff;
+  -webkit-transition: all 0.2s ease;
+  -moz-transition: all 0.2s ease;
+  -o-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+ul,
+ol {
+  list-style: none;
+  padding: 0;
+}
+img {
+  object-fit: cover;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  display: block;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Wadik", sans-serif;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+input,
+button,
+textarea,
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
