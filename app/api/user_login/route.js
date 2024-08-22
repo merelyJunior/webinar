@@ -13,7 +13,7 @@ export async function POST(req) {
 
     // Проверяем, существует ли запись с данным именем и телефоном
     const [existingUser] = await connection.query(
-      'SELECT * FROM Users WHERE name = ? AND phone = ?',
+      'SELECT * FROM users WHERE name = ? AND phone = ?',
       [name, phone]
     );
 

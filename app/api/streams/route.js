@@ -9,7 +9,7 @@ export async function GET() {
 
     const query = `
       SELECT id, name, start_date, scenario_id, video_id, video_duration, users_count
-      FROM Streams
+      FROM streams
       ORDER BY start_date DESC
       LIMIT 1
     `;

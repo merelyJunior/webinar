@@ -19,7 +19,7 @@ export async function GET(req) {
     console.log('Соединение с базой данных установлено');
 
     const [existingUser] = await connection.query(
-      'SELECT * FROM Users WHERE name = ? AND phone = ?',
+      'SELECT * FROM users WHERE name = ? AND phone = ?',
       [name, phone]
     );
     console.log('Проверка существующего пользователя:', existingUser);
