@@ -7,6 +7,8 @@ export async function POST(req) {
   try {
     const { name, phone, password, is_admin } = await req.json();
 
+    console.log('Received data:', { name, phone, password, is_admin });
+
     connection = await pool.getConnection();
 
     // Проверяем, существует ли запись с данным именем и телефоном
