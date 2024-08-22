@@ -13,7 +13,7 @@ export async function GET() {
     const connection = await pool.getConnection();
     const queryStream = `
       SELECT start_date, scenario_id
-      FROM Streams
+      FROM streams
       ORDER BY start_date DESC
       LIMIT 1
     `;

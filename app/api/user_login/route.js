@@ -28,7 +28,7 @@ export async function POST(req) {
       );
 
       const [newUser] = await connection.query(
-        'SELECT * FROM Users WHERE name = ? AND phone = ?',
+        'SELECT * FROM users WHERE name = ? AND phone = ?',
         [name, phone]
       );
 

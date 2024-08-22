@@ -37,7 +37,7 @@ export async function GET(req) {
       );
 
       const [newUser] = await connection.query(
-        'SELECT * FROM Users WHERE name = ? AND phone = ?',
+        'SELECT * FROM users WHERE name = ? AND phone = ?',
         [name, phone]
       );
       user = newUser[0];
