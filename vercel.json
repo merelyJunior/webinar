@@ -1,7 +1,7 @@
 {
   "version": 2,
   "functions": {
-    "api/**/route.js": {
+    "api/user_login/route.js": {
       "maxDuration": 60
     }
   }
