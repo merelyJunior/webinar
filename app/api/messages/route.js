@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
+import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
 
 let isScheduled = false;
 let previousStartTime = null;
@@ -15,8 +15,8 @@ export async function GET(req) {
       SELECT start_date, scenario_id
       FROM streams
       ORDER BY start_date DESC
-      LIMIT 1`
-    ;
+      LIMIT 1
+    `;
     const { rows: streamRows } = await client.query(queryStream);
 
     const startTime = streamRows[0]?.start_date;
@@ -36,8 +36,8 @@ export async function GET(req) {
     const queryScenario = `
       SELECT scenario_text
       FROM scenario
-      WHERE id = $1`
-    ;
+      WHERE id = $1
+    `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
 
@@ -112,7 +112,7 @@ export async function GET(req) {
 
 export async function POST(request) {
   try {
-    const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
+    const { newMessages = [], pinnedMessageId, unpin } = await request.json();
 
     if (!Array.isArray(newMessages)) {
       console.error('newMessages должен быть массивом');
@@ -121,27 +121,15 @@ export async function POST(request) {
 
     // Обновление сообщений
     for (const message of newMessages) {
-      // Добавляем сообщение в базу данных
       await saveMessageToDb(message);
-
-      // Отправляем только отправителю
-      if (sender) {
-        const writer = clients.find(client => client.sender === sender);
-        if (writer) {
-          writer.write(`data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n`).catch(err => {
-            console.error('Ошибка при отправке сообщения отправителю:', err);
-          });
-        }
-      }
     }
 
-    // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
+      // Обновление закрепленных сообщений
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
-    // Обновляем всех клиентов, исключая только что отправленные сообщения
-    broadcastMessages(sender);
+    broadcastMessages();
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
     console.error('Ошибка при обновлении сообщения:', error);
@@ -149,13 +137,11 @@ export async function POST(request) {
   }
 }
 
-// Функция для отправки сообщений всем клиентам, исключая отправленные сообщения
-async function broadcastMessages(excludeSender) {
+// Функция для отправки сообщений всем клиентам
+async function broadcastMessages() {
   const currentMessages = await loadMessagesFromDb();
   const messagePayload = {
-    messages: excludeSender
-      ? currentMessages.filter(msg => msg.sender !== excludeSender)
-      : currentMessages,
+    messages: currentMessages,
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
@@ -168,14 +154,13 @@ async function broadcastMessages(excludeSender) {
   });
 }
 
-
 async function saveMessageToDb(message) {
   const client = await pool.connect();
   try {
-    const insertQuery =`
+    const insertQuery = `
       INSERT INTO messages (id, sender, text, sending_time, pinned)
-      VALUES ($1, $2, $3, $4, $5)` 
-    ;
+      VALUES ($1, $2, $3, $4, $5)
+    `;
     await client.query(insertQuery, [
       message.id,
       message.sender,
