@@ -33,21 +33,23 @@ const HomePage = () => {
   const initializeStream = async () => {
     try {
       const streamsData = await getStreamData();
-
+  
       if (!streamsData || !streamsData.start_date) {
         console.error('No streams data available');
         return;
       }
-
+  
       const { start_date, video_duration, scenario_id, video_id } = streamsData;
       
-      const startTime = new Date(start_date);
-      
+      // Преобразование времени начала в локальное время пользователя
+      const startTimeUtc = new Date(start_date);
+      const startTime = new Date(startTimeUtc.getTime() - startTimeUtc.getTimezoneOffset() * 60000);
+  
       if (isNaN(startTime.getTime())) {
         console.error('Invalid start date');
         return;
       }
-
+  
       const now = new Date();
       const duration = video_duration || 0;
       const streamEndTime = new Date(startTime);
@@ -62,7 +64,7 @@ const HomePage = () => {
         streamStatus = 'inProgress';
       }
       const delayTime = Math.max((now - startTime) / 1000, 0);
-
+  
       setStartStream(prevState => ({
         ...prevState,
         delayTime,
@@ -71,12 +73,12 @@ const HomePage = () => {
         scenario_id,
         video_id
       }));
-
+  
       if (streamStatus === 'notStarted') {
         const interval = setInterval(() => {
           const now = new Date();
           const timeDifference = startTime - now;
-
+  
           if (timeDifference <= 0) {
             clearInterval(interval);
             setStartStream(prevState => ({
@@ -95,11 +97,12 @@ const HomePage = () => {
           }
         }, 1000);
       }
-
+  
     } catch (error) {
       console.error('Error initializing stream:', error);
     }
   };
+  
   
 
   const [userName, setUserName] = useState(null);
