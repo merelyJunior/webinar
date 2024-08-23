@@ -112,7 +112,7 @@ export async function GET(req) {
 
 export async function POST(request) {
   try {
-    const { newMessages = [], pinnedMessageId, unpin } = await request.json();
+    const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
 
     if (!Array.isArray(newMessages)) {
       console.error('newMessages должен быть массивом');
@@ -121,15 +121,27 @@ export async function POST(request) {
 
     // Обновление сообщений
     for (const message of newMessages) {
+      // Добавляем сообщение в базу данных
       await saveMessageToDb(message);
+
+      // Отправляем только отправителю
+      if (sender) {
+        const writer = clients.find(client => client.sender === sender);
+        if (writer) {
+          writer.write(`data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n`).catch(err => {
+            console.error('Ошибка при отправке сообщения отправителю:', err);
+          });
+        }
+      }
     }
 
+    // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
-      // Обновление закрепленных сообщений
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
-    broadcastMessages();
+    // Обновляем всех клиентов, исключая только что отправленные сообщения
+    broadcastMessages(sender);
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
     console.error('Ошибка при обновлении сообщения:', error);
@@ -137,11 +149,13 @@ export async function POST(request) {
   }
 }
 
-// Функция для отправки сообщений всем клиентам
-async function broadcastMessages() {
+// Функция для отправки сообщений всем клиентам, исключая отправленные сообщения
+async function broadcastMessages(excludeSender) {
   const currentMessages = await loadMessagesFromDb();
   const messagePayload = {
-    messages: currentMessages,
+    messages: excludeSender
+      ? currentMessages.filter(msg => msg.sender !== excludeSender)
+      : currentMessages,
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
@@ -153,6 +167,7 @@ async function broadcastMessages() {
     });
   });
 }
+
 
 async function saveMessageToDb(message) {
   const client = await pool.connect();
