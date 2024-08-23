@@ -13,9 +13,6 @@ export async function middleware(req) {
 
   const token = cookies['authToken'] || '';
 
-  console.log('Проверка пути:', pathname);
-  console.log('Найденный токен:', token);
-
   // Определите публичные маршруты
   const publicPaths = ['/', '/admin', '/api/invite_link'];
 

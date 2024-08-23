@@ -19,22 +19,22 @@ export async function POST(request) {
       }
       const user = rows[0];
 
-      // Создание JWT токена доступа
-      const accessToken = await new SignJWT({ id: user.id, username: user.name, is_admin: user.is_admin })
-        .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-        .setExpirationTime('1h')
-        .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+      // // Создание JWT токена доступа
+      // const accessToken = await new SignJWT({ id: user.id, username: user.name, is_admin: user.is_admin })
+      //   .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      //   .setExpirationTime('1h')
+      //   .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
-      // Создание JWT токена обновления
-      const refreshToken = await new SignJWT({ id: user.id })
-        .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-        .setExpirationTime('7d')
-        .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+      // // Создание JWT токена обновления
+      // const refreshToken = await new SignJWT({ id: user.id })
+      //   .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      //   .setExpirationTime('7d')
+      //   .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
-      // Установка токенов в куки
+      // // Установка токенов в куки
       const response = NextResponse.json({ message: 'Успешно вошли' });
-      response.cookies.set('authToken', accessToken);
-      response.cookies.set('refreshToken', refreshToken);
+      // response.cookies.set('authToken', accessToken);
+      // response.cookies.set('refreshToken', refreshToken);
 
       return response;
     } finally {
