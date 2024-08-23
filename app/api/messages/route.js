@@ -119,20 +119,13 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
     }
 
-    // Обновление сообщений
+    // Обработка новых сообщений
     for (const message of newMessages) {
-      // Добавляем сообщение в базу данных
-      await saveMessageToDb(message);
+      // Отправляем сообщение клиентам
+      broadcastMessage(message, sender);
 
-      // Отправляем только отправителю
-      if (sender) {
-        const writer = clients.find(client => client.sender === sender);
-        if (writer) {
-          writer.write(`data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n`).catch(err => {
-            console.error('Ошибка при отправке сообщения отправителю:', err);
-          });
-        }
-      }
+      // Сохраняем сообщение в базу данных
+      await saveMessageToDb(message);
     }
 
     // Обновление закрепленных сообщений
@@ -142,11 +135,29 @@ export async function POST(request) {
 
     // Обновляем всех клиентов, исключая только что отправленные сообщения
     broadcastMessages(sender);
+
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
     console.error('Ошибка при обновлении сообщения:', error);
     return NextResponse.json({ message: 'Ошибка сервера' }, { status: 500 });
   }
+}
+
+// Функция для отправки одного сообщения клиентам
+function broadcastMessage(message, sender) {
+  const messagePayload = {
+    messages: [message],
+    clientsCount: clients.length
+  };
+  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
+
+  clients.forEach(client => {
+    // Отправляем сообщение клиенту
+    client.write(messageData).catch(err => {
+      console.error('Ошибка при отправке сообщения клиенту:', err);
+      clients.splice(clients.indexOf(client), 1);
+    });
+  });
 }
 
 // Функция для отправки сообщений всем клиентам, исключая отправленные сообщения
