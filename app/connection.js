@@ -1,15 +1,12 @@
-import { Pool } from 'pg';
+import mysql from 'mysql2/promise';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+// Настройте пул соединений
+const pool = mysql.createPool({
+  host: '85.209.154.162',
+  user: 'root',
+  password: 'Haw4RYArvXY7bLnE3psK',
+  database: 'webinar',
+  timezone: 'local'
 });
 
-export default async function handler(req, res) {
-  const client = await pool.connect();
-  try {
-    const result = await client.query('SELECT * FROM your_table');
-    res.json(result.rows);
-  } finally {
-    client.release();
-  }
-}
+export default pool;
