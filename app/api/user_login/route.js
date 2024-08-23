@@ -1,17 +1,15 @@
 import { SignJWT } from 'jose';
-import pool from '/app/connection';
+import pool from '/app/connection'; // Ваше подключение к базе данных PostgreSQL
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
-  let connection;
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
     const { name, phone, password, is_admin } = await req.json();
 
-    connection = await pool.getConnection();
-
     // Проверяем, существует ли запись с данным именем и телефоном
-    const [existingUser] = await connection.query(
-      'SELECT * FROM users WHERE name = ? AND phone = ?',
+    const { rows: existingUser } = await client.query(
+      'SELECT * FROM users WHERE name = $1 AND phone = $2',
       [name, phone]
     );
 
@@ -20,17 +18,12 @@ export async function POST(req) {
     if (existingUser.length > 0) {
       user = existingUser[0];
     } else {
-      await connection.query(
-        'INSERT INTO Users (name, phone, password, is_admin) VALUES (?, ?, ?, ?)',
+      const result = await client.query(
+        'INSERT INTO users (name, phone, password, is_admin) VALUES ($1, $2, $3, $4) RETURNING *',
         [name, phone, password, is_admin]
       );
 
-      const [newUser] = await connection.query(
-        'SELECT * FROM users WHERE name = ? AND phone = ?',
-        [name, phone]
-      );
-
-      user = newUser[0];
+      user = result.rows[0];
     }
 
     // Создание JWT токена доступа
@@ -54,8 +47,6 @@ export async function POST(req) {
     console.error('Ошибка при обработке данных:', error);
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    client.release(); // Освобождаем клиент
   }
 }
