@@ -1,21 +1,22 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
+import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
 
 let isScheduled = false;
 let previousStartTime = null;
 
+const clients = []; // Массив для хранения подключенных клиентов
 
 export async function GET(req) {
-  const client = await pool.connect();
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
     // Получаем startTime и scenarioId из базы данных
-    const queryStream = `
+    const queryStream = 
       SELECT start_date, scenario_id
       FROM streams
       ORDER BY start_date DESC
       LIMIT 1
-    `;
+    ;
     const { rows: streamRows } = await client.query(queryStream);
 
     const startTime = streamRows[0]?.start_date;
@@ -32,11 +33,11 @@ export async function GET(req) {
     }
 
     // Получаем сценарий комментариев по scenarioId
-    const queryScenario = `
+    const queryScenario = 
       SELECT scenario_text
       FROM scenario
       WHERE id = $1
-    `;
+    ;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
 
@@ -68,16 +69,6 @@ export async function GET(req) {
       });
     }
 
-    // Генерация уникального ID для соединения
-    const connectionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Добавление клиента в базу данных
-    await client.query(`
-      INSERT INTO clients_online (connection_id)
-      VALUES ($1)`,
-      [connectionId]
-    );
-
     // Создание нового потока данных для отправки сообщений клиентам
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
@@ -85,21 +76,17 @@ export async function GET(req) {
     // Логирование подключения клиента
     console.log('Клиент подключился');
     
+    // Добавление нового клиента в список
+    clients.push(writer);
+
     // Отправка текущих сообщений новому клиенту
     const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
-    const clientsCount = await getClientsCount();
-    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount })}\n\n`);
+    writer.write(data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n);
 
     // Очистка при закрытии соединения
-    const onClose = async () => {
+    const onClose = () => {
       console.log('Клиент отключился');
-
-      await client.query(`
-        DELETE FROM clients_online
-        WHERE connection_id = $1`,
-        [connectionId]
-      );
-
+      clients.splice(clients.indexOf(writer), 1);
       broadcastMessages(); // Уведомление остальных клиентов о новом количестве клиентов
     };
     writer.closed.then(onClose, onClose);
@@ -141,7 +128,7 @@ export async function POST(request) {
       if (sender) {
         const writer = clients.find(client => client.sender === sender);
         if (writer) {
-          writer.write(`data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n`).catch(err => {
+          writer.write(data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n).catch(err => {
             console.error('Ошибка при отправке сообщения отправителю:', err);
           });
         }
@@ -165,14 +152,13 @@ export async function POST(request) {
 // Функция для отправки сообщений всем клиентам, исключая отправленные сообщения
 async function broadcastMessages(excludeSender) {
   const currentMessages = await loadMessagesFromDb();
-  const clientsCount = await getClientsCount(); // Отдельный запрос для получения актуального количества клиентов
   const messagePayload = {
     messages: excludeSender
       ? currentMessages.filter(msg => msg.sender !== excludeSender)
       : currentMessages,
-    clientsCount // Используем значение из базы данных
+    clientsCount: clients.length
   };
-  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
+  const messageData = data: ${JSON.stringify(messagePayload)}\n\n;
 
   clients.forEach(client => {
     client.write(messageData).catch(err => {
@@ -186,10 +172,10 @@ async function broadcastMessages(excludeSender) {
 async function saveMessageToDb(message) {
   const client = await pool.connect();
   try {
-    const insertQuery = `
+    const insertQuery = 
       INSERT INTO messages (id, sender, text, sending_time, pinned)
       VALUES ($1, $2, $3, $4, $5)
-    `;
+    ;
     await client.query(insertQuery, [
       message.id,
       message.sender,
@@ -226,15 +212,6 @@ async function updatePinnedStatus(messageId, pinned) {
     await client.query(updateQuery, [pinned, messageId]);
   } catch (error) {
     console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
-  } finally {
-    client.release();
-  }
-}
-async function getClientsCount() {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query('SELECT COUNT(*) FROM clients_online');
-    return parseInt(rows[0].count, 10);
   } finally {
     client.release();
   }
