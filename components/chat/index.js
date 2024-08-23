@@ -41,7 +41,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const handleCommentChange = (e) => {
     setComment(e.target.value);
   };
-
+  
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
 

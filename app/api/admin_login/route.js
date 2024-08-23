@@ -4,12 +4,12 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req) {
   try {
-    const { name, phone, password, is_admin } = await req.json();
+    const { username, phone = '', password, is_admin } = await req.json();
 
     // Проверяем, существует ли запись с данным именем и телефоном
     const { rows: existingUser } = await pool.query(
       'SELECT * FROM users WHERE name = $1 AND phone = $2',
-      [name, phone]
+      [username, phone]
     );
 
     let user;
@@ -19,12 +19,12 @@ export async function POST(req) {
     } else {
       await pool.query(
         'INSERT INTO users (name, phone, password, is_admin) VALUES ($1, $2, $3, $4)',
-        [name, phone, password, is_admin]
+        [username, phone, password, is_admin]
       );
 
       const { rows: newUser } = await pool.query(
         'SELECT * FROM users WHERE name = $1 AND phone = $2',
-        [name, phone]
+        [username, phone]
       );
 
       user = newUser[0];

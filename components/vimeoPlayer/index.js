@@ -9,7 +9,7 @@ const VimeoPlayer = ({ startStream }) => {
   const [isPlayed, setIsPlayed] = useState(false);
   const [quality, setQuality] = useState('720p');
   const [showPopup, setShowPopup] = useState(false);
-  const [streamStatus, setStreamStatus] = useState(startStream.streamStatus);
+  const [streamStatus, setStreamStatus] = useState(null);
 
   const [timings, setTimings] = useState([]);
   const [message, setMessage] = useState('');
@@ -50,6 +50,7 @@ const VimeoPlayer = ({ startStream }) => {
         console.error('Vimeo player error:', error);
       });
     }
+    setStreamStatus(startStream.streamStatus);
   }, [player, startStream, quality, timings, streamStatus]);
 
   useEffect(() => {
@@ -91,6 +92,7 @@ const VimeoPlayer = ({ startStream }) => {
       });
     }
   };
+  
 
   const renderStreamStatus = () => {
     switch (streamStatus) {

@@ -52,7 +52,7 @@ const HomePage = () => {
       const duration = video_duration || 0;
       const streamEndTime = new Date(startTime);
       streamEndTime.setSeconds(streamEndTime.getSeconds() + duration);
-
+      
       let streamStatus = '';
       if (now < startTime) {
         streamStatus = 'notStarted';
@@ -110,9 +110,10 @@ const HomePage = () => {
     if (token) {
       try {
         const decodedToken = decodeJwt(token);
+        setUserName(decodedToken.name);
+        
         if (decodedToken.is_admin === 1) {
           setIsAdmin(true);
-          setUserName(decodedToken.name);
         }
       } catch (error) {
         console.error('Invalid token:', error);
@@ -140,6 +141,7 @@ const HomePage = () => {
   const handleClientsCount = (e) => {
     setUserOnline(e);
   }
+  
   return (
     <section className={styles.homePage}>
       <div className={styles.inner}>
