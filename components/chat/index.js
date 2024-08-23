@@ -17,7 +17,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
      
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
-       
+        
         setClientsCount(clientsCount);
         if (messages) {
          setVisibleMessages(messages);
@@ -142,7 +142,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
               </div>
               
             </div>
-          ))
+          )).reverse()
         ) : (
           <p>Нет сообщений</p>
         )}

@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
 import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
 
-let messages = [];
-let clients = [];
 let isScheduled = false;
 let previousStartTime = null;
+
+const clients = []; // Массив для хранения подключенных клиентов
 
 export async function GET(req) {
   const client = await pool.connect(); // Получаем клиента из пула
@@ -53,7 +53,7 @@ export async function GET(req) {
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
 
-        schedule.scheduleJob(new Date(scheduleTime), () => {
+        schedule.scheduleJob(new Date(scheduleTime), async () => {
           const message = {
             id: Date.now(), // Генерация уникального ID на основе времени
             sender,
@@ -62,7 +62,8 @@ export async function GET(req) {
             pinned: pinned || false
           };
 
-          messages.push(message);
+          // Сохраняем сообщение в базе данных
+          await saveMessageToDb(message);
           broadcastMessages(); // Обновляем всех клиентов
         });
       });
@@ -79,13 +80,13 @@ export async function GET(req) {
     clients.push(writer);
 
     // Отправка текущих сообщений новому клиенту
-    console.log('Отправка текущих сообщений клиенту:', messages);
-    writer.write(`data: ${JSON.stringify({ messages, clientsCount: clients.length })}\n\n`);
+    const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
+    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
 
     // Очистка при закрытии соединения
     const onClose = () => {
       console.log('Клиент отключился');
-      clients = clients.filter(client => client !== writer);
+      clients.splice(clients.indexOf(writer), 1);
       broadcastMessages(); // Уведомление остальных клиентов о новом количестве клиентов
     };
     writer.closed.then(onClose, onClose);
@@ -119,12 +120,13 @@ export async function POST(request) {
     }
 
     // Обновление сообщений
-    messages = [...messages, ...newMessages];
+    for (const message of newMessages) {
+      await saveMessageToDb(message);
+    }
 
     if (pinnedMessageId !== undefined) {
-      messages = messages.map((msg) =>
-        msg.id === pinnedMessageId ? { ...msg, pinned: !unpin } : msg
-      );
+      // Обновление закрепленных сообщений
+      await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
     broadcastMessages();
@@ -136,9 +138,10 @@ export async function POST(request) {
 }
 
 // Функция для отправки сообщений всем клиентам
-function broadcastMessages() {
+async function broadcastMessages() {
+  const currentMessages = await loadMessagesFromDb();
   const messagePayload = {
-    messages,
+    messages: currentMessages,
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
@@ -146,7 +149,55 @@ function broadcastMessages() {
   clients.forEach(client => {
     client.write(messageData).catch(err => {
       console.error('Ошибка при отправке сообщения клиенту:', err);
-      clients = clients.filter(c => c !== client);
+      clients.splice(clients.indexOf(client), 1);
     });
   });
+}
+
+async function saveMessageToDb(message) {
+  const client = await pool.connect();
+  try {
+    const insertQuery = `
+      INSERT INTO messages (id, sender, text, sending_time, pinned)
+      VALUES ($1, $2, $3, $4, $5)
+    `;
+    await client.query(insertQuery, [
+      message.id,
+      message.sender,
+      message.text,
+      message.sendingTime,
+      message.pinned,
+    ]);
+  } catch (error) {
+    console.error('Ошибка при сохранении сообщения в базе данных:', error);
+  } finally {
+    client.release();
+  }
+}
+
+async function loadMessagesFromDb() {
+  const client = await pool.connect();
+  try {
+    const query = 'SELECT * FROM messages ORDER BY sending_time DESC';
+    const { rows } = await client.query(query);
+    
+    return rows;
+  } catch (error) {
+    console.error('Ошибка при загрузке сообщений из базы данных:', error);
+    return [];
+  } finally {
+    client.release();
+  }
+}
+
+async function updatePinnedStatus(messageId, pinned) {
+  const client = await pool.connect();
+  try {
+    const updateQuery = 'UPDATE messages SET pinned = $1 WHERE id = $2';
+    await client.query(updateQuery, [pinned, messageId]);
+  } catch (error) {
+    console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
+  } finally {
+    client.release();
+  }
 }
