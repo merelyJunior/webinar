@@ -11,11 +11,11 @@ export async function GET(req) {
   const client = await pool.connect(); // Получаем клиента из пула
   try {
     // Получаем startTime и scenarioId из базы данных
-    const queryStream = 
+    const queryStream = `
       SELECT start_date, scenario_id
       FROM streams
       ORDER BY start_date DESC
-      LIMIT 1
+      LIMIT 1`
     ;
     const { rows: streamRows } = await client.query(queryStream);
 
@@ -33,10 +33,10 @@ export async function GET(req) {
     }
 
     // Получаем сценарий комментариев по scenarioId
-    const queryScenario = 
+    const queryScenario = `
       SELECT scenario_text
       FROM scenario
-      WHERE id = $1
+      WHERE id = $1`
     ;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
@@ -81,7 +81,7 @@ export async function GET(req) {
 
     // Отправка текущих сообщений новому клиенту
     const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
-    writer.write(data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n);
+    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
 
     // Очистка при закрытии соединения
     const onClose = () => {
@@ -128,7 +128,7 @@ export async function POST(request) {
       if (sender) {
         const writer = clients.find(client => client.sender === sender);
         if (writer) {
-          writer.write(data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n).catch(err => {
+          writer.write(`data: ${JSON.stringify({ messages: [message], clientsCount: clients.length })}\n\n`).catch(err => {
             console.error('Ошибка при отправке сообщения отправителю:', err);
           });
         }
@@ -158,7 +158,7 @@ async function broadcastMessages(excludeSender) {
       : currentMessages,
     clientsCount: clients.length
   };
-  const messageData = data: ${JSON.stringify(messagePayload)}\n\n;
+  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
 
   clients.forEach(client => {
     client.write(messageData).catch(err => {
@@ -172,9 +172,9 @@ async function broadcastMessages(excludeSender) {
 async function saveMessageToDb(message) {
   const client = await pool.connect();
   try {
-    const insertQuery = 
+    const insertQuery =`
       INSERT INTO messages (id, sender, text, sending_time, pinned)
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3, $4, $5)` 
     ;
     await client.query(insertQuery, [
       message.id,
