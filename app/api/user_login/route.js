@@ -1,28 +1,36 @@
 import { SignJWT } from 'jose';
+import pool from '/app/connection';
 import { NextResponse } from 'next/server';
-
-// Имитация данных пользователей
-const mockUsers = [];
-
-// Функция для получения пользователя по имени и телефону
-const getUserByNameAndPhone = (name, phone) => {
-  return mockUsers.find(user => user.name === name && user.phone === phone);
-};
 
 export async function POST(req) {
   let connection;
   try {
     const { name, phone, password, is_admin } = await req.json();
 
-    console.log('Received data:', { name, phone, password, is_admin });
+    connection = await pool.getConnection();
 
     // Проверяем, существует ли запись с данным именем и телефоном
-    let user = getUserByNameAndPhone(name, phone);
+    const [existingUser] = await connection.query(
+      'SELECT * FROM users WHERE name = ? AND phone = ?',
+      [name, phone]
+    );
 
-    if (!user) {
-      // Добавляем нового пользователя
-      user = { id: mockUsers.length + 1, name, phone, password, is_admin };
-      mockUsers.push(user);
+    let user;
+
+    if (existingUser.length > 0) {
+      user = existingUser[0];
+    } else {
+      await connection.query(
+        'INSERT INTO Users (name, phone, password, is_admin) VALUES (?, ?, ?, ?)',
+        [name, phone, password, is_admin]
+      );
+
+      const [newUser] = await connection.query(
+        'SELECT * FROM users WHERE name = ? AND phone = ?',
+        [name, phone]
+      );
+
+      user = newUser[0];
     }
 
     // Создание JWT токена доступа
@@ -44,6 +52,10 @@ export async function POST(req) {
     return response;
   } catch (error) {
     console.error('Ошибка при обработке данных:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

@@ -6,6 +6,7 @@ export async function POST(request) {
     const { scenarioId } = await request.json();
 
     const connection = await pool.getConnection();
+    
     try {
       const query = `
         SELECT scenario_sales

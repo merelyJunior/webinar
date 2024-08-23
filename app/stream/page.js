@@ -22,8 +22,8 @@ const HomePage = () => {
     try {
       const response = await axios.get('/api/streams', { headers: { 'Cache-Control': 'no-cache' } });
       const newData = response.data;
-      const { start_date, video_id, video_duration } = newData;
-      return { start_date, video_id, video_duration };
+      const { start_date, video_duration, scenario_id, video_id} = newData;
+      return { start_date, video_duration, scenario_id, video_id };
     } catch (error) {
       console.error('Error fetching stream data:', error);
       return {};
@@ -39,7 +39,8 @@ const HomePage = () => {
         return;
       }
 
-      const { start_date, video_duration } = streamsData;
+      const { start_date, video_duration, scenario_id, video_id } = streamsData;
+      
       const startTime = new Date(start_date);
       
       if (isNaN(startTime.getTime())) {
@@ -66,7 +67,9 @@ const HomePage = () => {
         ...prevState,
         delayTime,
         startTime,
-        streamStatus
+        streamStatus,
+        scenario_id,
+        video_id
       }));
 
       if (streamStatus === 'notStarted') {
@@ -97,6 +100,9 @@ const HomePage = () => {
       console.error('Error initializing stream:', error);
     }
   };
+  
+
+  const [userName, setUserName] = useState(null);
 
   useEffect(() => {
     const token = Cookies.get('authToken');
@@ -106,6 +112,7 @@ const HomePage = () => {
         const decodedToken = decodeJwt(token);
         if (decodedToken.is_admin === 1) {
           setIsAdmin(true);
+          setUserName(decodedToken.name);
         }
       } catch (error) {
         console.error('Invalid token:', error);
@@ -151,7 +158,7 @@ const HomePage = () => {
             <h3 className={styles['comments-title']}>
               КОММЕНТАРИИ
             </h3>
-            <Chat isAdmin={isAdmin} setClientsCount={handleClientsCount}/>
+            <Chat isAdmin={isAdmin} setClientsCount={handleClientsCount} userName={userName}/>
           </div>
         </div>
         <p className={styles.copyright}>

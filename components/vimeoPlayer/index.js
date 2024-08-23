@@ -1,7 +1,7 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import Player from '@vimeo/player';
 import styles from './index.module.css';
+import axios from 'axios';
 
 const VimeoPlayer = ({ startStream }) => {
   const playerRef = useRef(null);
@@ -9,13 +9,16 @@ const VimeoPlayer = ({ startStream }) => {
   const [isPlayed, setIsPlayed] = useState(false);
   const [quality, setQuality] = useState('720p');
   const [showPopup, setShowPopup] = useState(false);
+  const [streamStatus, setStreamStatus] = useState(startStream.streamStatus);
 
-  const timings = [5, 20, 30, 40, 50, 60, 75];
-  const message = "Оплата сделана";
+  const [timings, setTimings] = useState([]);
+  const [message, setMessage] = useState('');
+  const [dataFetched, setDataFetched] = useState(false);
+
   useEffect(() => {
     if (playerRef.current && !player) {
       const newPlayer = new Player(playerRef.current, {
-        id: 997309877,
+        id: startStream.video_id,
         width: 855,
         height: 480,
         controls: false,
@@ -25,7 +28,7 @@ const VimeoPlayer = ({ startStream }) => {
       setPlayer(newPlayer);
 
       newPlayer.on('loaded', () => {
-        if (startStream.streamStatus === 'inProgress' && startStream.startTime > 0) {
+        if (streamStatus === 'inProgress' && startStream.startTime > 0) {
           newPlayer.setCurrentTime(startStream.delayTime).catch((error) => {
             console.error('Error setting current time:', error);
           });
@@ -33,52 +36,64 @@ const VimeoPlayer = ({ startStream }) => {
       });
 
       newPlayer.on('timeupdate', ({ seconds }) => {
-        
-        if (timings.includes()) {
+        if (timings.includes(Math.round(seconds))) {
           setShowPopup(true);
-          if (onCommentShow) {
-            onCommentShow(Math.round(seconds));
-          }
-  
           setTimeout(() => setShowPopup(false), 3000);
         }
+      });
+
+      newPlayer.on('ended', () => {
+        setStreamStatus('ended');
       });
 
       newPlayer.on('error', (error) => {
         console.error('Vimeo player error:', error);
       });
     }
-  }, [player, startStream, quality]);
+  }, [player, startStream, quality, timings, streamStatus]);
+
+  useEffect(() => {
+    if (startStream && startStream.scenario_id && !dataFetched) {
+      axios.post('/api/get_sales', { scenarioId: startStream.scenario_id })
+        .then(response => {
+          const { scenario_sales } = response.data;
+          if (scenario_sales && scenario_sales.length > 0) {
+            const { showAt, text } = scenario_sales[0];
+            setTimings(showAt);
+            setMessage(text);
+          }
+          setDataFetched(true); 
+        })
+        .catch(error => {
+          setDataFetched(true);
+          console.error('Ошибка при выполнении запроса:', error);
+        });
+    }
+  }, [startStream, dataFetched]);
 
   const handlePlayClick = () => {
     if (player) {
-      player
-        .play()
-        .then(() => {
-          setIsPlayed(true);
-        })
-        .catch((error) => {
-          console.error('Error starting playback:', error);
-        });
+      player.play().then(() => {
+        setIsPlayed(true);
+      }).catch((error) => {
+        console.error('Error starting playback:', error);
+      });
     }
   };
 
   const handleQualityChange = (event) => {
     const selectedQuality = event.target.value;
     if (player) {
-      player
-        .setQuality(selectedQuality)
-        .then(() => {
-          setQuality(selectedQuality);
-        })
-        .catch((error) => {
-          console.error('Error changing quality:', error);
-        });
+      player.setQuality(selectedQuality).then(() => {
+        setQuality(selectedQuality);
+      }).catch((error) => {
+        console.error('Error changing quality:', error);
+      });
     }
   };
 
   const renderStreamStatus = () => {
-    switch (startStream.streamStatus) {
+    switch (streamStatus) {
       case 'notStarted':
         return (
           <div className={styles['stream-not-started']}>

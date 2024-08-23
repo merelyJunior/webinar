@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
 
-const Chat = ({ isAdmin, setClientsCount }) => {
+const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -48,7 +48,7 @@ const Chat = ({ isAdmin, setClientsCount }) => {
     try {
       const message = {
         id: Date.now(),
-        sender: !isAdmin ? 'Вы' : 'Модератор',
+        sender: !isAdmin ? userName : 'Модератор',
         text: comment,
         sendingTime: new Date().toLocaleTimeString(),
         pinned: false
