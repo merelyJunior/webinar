@@ -2,22 +2,25 @@
 import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
 
 export async function POST(request) {
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
     const { scenarioId } = await request.json();
 
-    const connection = await pool.getConnection();
-    
     try {
       const query = `
         SELECT scenario_sales
         FROM scenario
-        WHERE id = ?
+        WHERE id = $1
       `;
-      const [rows] = await connection.query(query, [scenarioId]);
+      const { rows } = await client.query(query, [scenarioId]);
+
+      if (rows.length === 0) {
+        return new Response(JSON.stringify({ error: 'Сценарий не найден' }), { status: 404 });
+      }
 
       return new Response(JSON.stringify(rows[0]), { status: 200 });
     } finally {
-      connection.release();
+      client.release(); // Освобождаем клиента
     }
   } catch (error) {
     console.error('Ошибка при получении сценария:', error);

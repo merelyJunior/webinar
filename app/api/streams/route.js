@@ -1,34 +1,27 @@
-import pool from '/app/connection'; // Проверьте правильность пути к pool
+import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-
-  let connection;
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
-    connection = await pool.getConnection();
-
     const query = `
       SELECT id, name, start_date, scenario_id, video_id, video_duration, users_count
       FROM streams
       ORDER BY start_date DESC
       LIMIT 1
     `;
-    const [rows] = await connection.query(query);
-
+    const { rows } = await client.query(query);
 
     return NextResponse.json(rows[0] || {});
   } catch (error) {
-    console.error('Error fetching data:', error);
-    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+    console.error('Ошибка при получении данных:', error);
+    return NextResponse.json({ error: 'Не удалось получить данные' }, { status: 500 });
   } finally {
-    if (connection) {
-      connection.release();
-      console.log('Connection released');
-    }
+    client.release(); // Освобождаем клиента
+    console.log('Соединение с базой данных закрыто');
   }
 }
 
 export async function POST() {
-  // Вы можете добавить обработку POST запроса, если необходимо
-  return NextResponse.json({ error: 'Method POST Not Allowed' }, { status: 405 });
+  return NextResponse.json({ error: 'Метод POST не разрешен' }, { status: 405 });
 }

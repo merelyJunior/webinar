@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection';
+import pool from '/app/connection'; // Убедитесь, что путь к `pool` правильный
 
 let messages = [];
 let clients = [];
 let isScheduled = false;
 let previousStartTime = null;
 
-export async function GET() {
+export async function GET(req) {
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
     // Получаем startTime и scenarioId из базы данных
-    const connection = await pool.getConnection();
     const queryStream = `
       SELECT start_date, scenario_id
       FROM streams
       ORDER BY start_date DESC
       LIMIT 1
     `;
-    const [streamRows] = await connection.query(queryStream);
+    const { rows: streamRows } = await client.query(queryStream);
 
     const startTime = streamRows[0]?.start_date;
     const scenarioId = streamRows[0]?.scenario_id;
@@ -36,10 +36,9 @@ export async function GET() {
     const queryScenario = `
       SELECT scenario_text
       FROM scenario
-      WHERE id = ?
+      WHERE id = $1
     `;
-    const [scenarioRows] = await connection.query(queryScenario, [scenarioId]);
-    connection.release();
+    const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
@@ -104,6 +103,9 @@ export async function GET() {
   } catch (error) {
     console.error('Ошибка в API маршруте startStream:', error);
     return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
+  } finally {
+    client.release(); // Освобождаем клиента
+    console.log('Соединение с базой данных закрыто');
   }
 }
 
