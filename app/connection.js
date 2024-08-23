@@ -2,9 +2,9 @@ import mysql from 'mysql2/promise';
 
 // Настройте пул соединений
 const pool = mysql.createPool({
-  host: 'localhost',
+  host: '85.209.154.162',
   user: 'root',
-  password: '',
+  password: 'Haw4RYArvXY7bLnE3psK',
   database: 'webinar',
   timezone: 'local'
 });
