@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
 
@@ -8,18 +9,20 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
-
+  
   useEffect(() => {
     const eventSource = new EventSource('/api/messages');
 
     eventSource.onmessage = (event) => {
+     
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
         
         setClientsCount(clientsCount);
         if (messages) {
-          setVisibleMessages(messages);
+         setVisibleMessages(messages);
         }
+        
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
       }
@@ -29,7 +32,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       eventSource.close();
     };
   }, []);
-
   useEffect(() => {
     if (!isUserScrolling) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,22 +41,19 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const handleCommentChange = (e) => {
     setComment(e.target.value);
   };
-
+  
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
 
-    const message = {
-      id: Date.now(),
-      sender: !isAdmin ? userName : 'Модератор',
-      text: comment,
-      sendingTime: new Date().toLocaleTimeString(),
-      pinned: false
-    };
-
-    // Добавляем сообщение в visibleMessages для мгновенного отображения
-    setVisibleMessages((prevMessages) => [message, ...prevMessages]);
-
     try {
+      const message = {
+        id: Date.now(),
+        sender: !isAdmin ? userName : 'Модератор',
+        text: comment,
+        sendingTime: new Date().toLocaleTimeString(),
+        pinned: false
+      };
+
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,16 +62,11 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
       if (!response.ok) {
         console.error('Ошибка при отправке сообщения:', await response.text());
-        // Удаляем сообщение из visibleMessages, если возникла ошибка
-        setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
         return;
       }
-
       setComment('');
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-      // Удаляем сообщение из visibleMessages, если возникла ошибка
-      setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
     }
   };
 
@@ -129,22 +123,24 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
               <div className={styles['message-data']}>
                 <p className={styles['sender-name']}>{mess.sender}</p>
                 <p className={styles['sending-time']}>{mess.sendingTime}</p>
+                
               </div>
               <div className={styles['pinned-controls']}>
                 {isAdmin && (
                     !mess.pinned ? (
                       <button className={styles['pin-btn']} onClick={() => handlePinMessage(mess)}>
-                        Закрепить
+                        
                       </button>
                     ) : (
                       <button className={styles['unpin-btn']} onClick={() => handleUnpinMessage(mess)}>
-                        Открепить
+                        
                       </button>
                     )
                   )
                 }
                 <p className={styles['message-text']}>{mess.text}</p>
               </div>
+              
             </div>
           )).reverse()
         ) : (

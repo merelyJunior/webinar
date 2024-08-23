@@ -109,7 +109,6 @@ export async function GET(req) {
     console.log('Соединение с базой данных закрыто');
   }
 }
-
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
@@ -122,7 +121,7 @@ export async function POST(request) {
     // Обработка новых сообщений
     for (const message of newMessages) {
       // Отправляем сообщение клиентам
-      broadcastMessage(message, sender);
+      broadcastMessages([message], sender);
 
       // Сохраняем сообщение в базу данных
       await saveMessageToDb(message);
@@ -133,8 +132,9 @@ export async function POST(request) {
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
-    // Обновляем всех клиентов, исключая только что отправленные сообщения
-    broadcastMessages(sender);
+    // Обновляем всех клиентов
+    const currentMessages = await loadMessagesFromDb();
+    broadcastMessages(currentMessages, sender);
 
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
@@ -143,30 +143,11 @@ export async function POST(request) {
   }
 }
 
-// Функция для отправки одного сообщения клиентам
-function broadcastMessage(message, sender) {
-  const messagePayload = {
-    messages: [message],
-    clientsCount: clients.length
-  };
-  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
-
-  clients.forEach(client => {
-    // Отправляем сообщение клиенту
-    client.write(messageData).catch(err => {
-      console.error('Ошибка при отправке сообщения клиенту:', err);
-      clients.splice(clients.indexOf(client), 1);
-    });
-  });
-}
-
-// Функция для отправки сообщений всем клиентам, исключая отправленные сообщения
-async function broadcastMessages(excludeSender) {
-  const currentMessages = await loadMessagesFromDb();
+async function broadcastMessages(messages, excludeSender) {
   const messagePayload = {
     messages: excludeSender
-      ? currentMessages.filter(msg => msg.sender !== excludeSender)
-      : currentMessages,
+      ? messages.filter(msg => msg.sender !== excludeSender)
+      : messages,
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
@@ -178,6 +159,9 @@ async function broadcastMessages(excludeSender) {
     });
   });
 }
+
+
+
 
 async function saveMessageToDb(message) {
   const client = await pool.connect();
