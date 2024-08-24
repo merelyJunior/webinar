@@ -5,6 +5,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const sentMessageIds = useRef(new Set()); // Хранит ID отправленных сообщений
 
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -26,6 +27,11 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
             const uniqueNewMessages = messages.filter((msg) => {
               if (prevMessageIds.has(msg.id)) {
                 console.log(`Сообщение с id ${msg.id} уже существует и не будет добавлено.`);
+                return false;
+              }
+              if (sentMessageIds.current.has(msg.id)) {
+                console.log(`Сообщение с id ${msg.id} было отправлено с этого клиента и не будет добавлено.`);
+                sentMessageIds.current.delete(msg.id); // Удаляем из временного списка отправленных сообщений
                 return false;
               }
               return true;
@@ -56,7 +62,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
-  
+
     const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
@@ -64,55 +70,40 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       sendingTime: new Date().toLocaleTimeString(),
       pinned: false
     };
-  
+
     console.log('Отправляем сообщение на сервер:', tempMessage);
-  
+
     setVisibleMessages((prevMessages) => {
       console.log('Добавляем временное сообщение в состояние:', tempMessage);
       return [tempMessage, ...prevMessages];
     });
-  
+
+    // Добавляем ID сообщения в ref, чтобы игнорировать его при получении через SSE
+    sentMessageIds.current.add(tempMessage.id);
+
     setComment('');
-  
+
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newMessages: [tempMessage] })
       });
-  
+
       if (response.ok) {
         const serverResponse = await response.json();
         console.log('Ответ сервера с сообщением:', serverResponse);
-  
-        // Логируем и сравниваем серверное сообщение с временным
-        serverResponse.forEach((msg, index) => {
-          console.log(`Сравнение временного сообщения с серверным (${index}):`, msg, tempMessage);
-        });
-  
-        if (serverResponse && serverResponse.length > 0) {
-          setVisibleMessages((prevMessages) => {
-            console.log('Сообщения до добавления ответа от сервера:', prevMessages);
-            const newMessages = serverResponse.filter(
-              (msg) => !prevMessages.some((prevMsg) => prevMsg.id === msg.id)
-            );
-            console.log('Сообщения для добавления после ответа от сервера:', newMessages);
-            return [...newMessages, ...prevMessages];
-          });
-        }
       } else {
         console.error('Ошибка при отправке сообщения');
-        setVisibleMessages((prevMessages) => {
-          console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
-          return prevMessages.filter(msg => msg.id !== tempMessage.id);
-        });
+        // Удаление временного сообщения в случае ошибки
+        setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
+        sentMessageIds.current.delete(tempMessage.id); // Удаляем ID из ref, т.к. сообщение не отправлено успешно
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-      setVisibleMessages((prevMessages) => {
-        console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
-        return prevMessages.filter(msg => msg.id !== tempMessage.id);
-      });
+      // Удаление временного сообщения в случае ошибки
+      setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
+      sentMessageIds.current.delete(tempMessage.id); // Удаляем ID из ref, т.к. сообщение не отправлено успешно
     }
   };
 
@@ -150,7 +141,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id, unpin: true }),
+        body: JSON.stringify({ pinnedMessageId: message.id, unpin: true }),  // Добавили флаг unpin
       });
     } catch (error) {
       console.error('Ошибка при откреплении сообщения:', error);
@@ -172,17 +163,16 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
               </div>
               <div className={styles['pinned-controls']}>
                 {isAdmin && (
-                    !mess.pinned ? (
-                      <button className={styles['pin-btn']} onClick={() => handlePinMessage(mess)}>
-                        Закрепить
-                      </button>
-                    ) : (
-                      <button className={styles['unpin-btn']} onClick={() => handleUnpinMessage(mess)}>
-                        Открепить
-                      </button>
-                    )
+                  !mess.pinned ? (
+                    <button className={styles['pin-btn']} onClick={() => handlePinMessage(mess)}>
+                      Закрепить
+                    </button>
+                  ) : (
+                    <button className={styles['unpin-btn']} onClick={() => handleUnpinMessage(mess)}>
+                      Открепить
+                    </button>
                   )
-                }
+                )}
                 <p className={styles['message-text']}>{mess.text}</p>
               </div>
             </div>
