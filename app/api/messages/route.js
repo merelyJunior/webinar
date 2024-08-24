@@ -64,7 +64,7 @@ export async function GET(req) {
 
           // Сохраняем сообщение в базе данных
           await saveMessageToDb(message);
-          broadcastMessages(); // Обновляем всех клиентов
+          broadcastMessages(message, sender); // Обновляем всех клиентов
         });
       });
     }
@@ -87,7 +87,6 @@ export async function GET(req) {
     const onClose = () => {
       console.log('Клиент отключился');
       clients.splice(clients.indexOf(writer), 1);
-      broadcastMessages(); // Уведомление остальных клиентов о новом количестве клиентов
     };
     writer.closed.then(onClose, onClose);
 
