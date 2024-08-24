@@ -11,8 +11,10 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   useEffect(() => {
     const eventSource = new EventSource('/api/messages');
-
+   
+    
     eventSource.onmessage = (event) => {
+      console.log(event.data);
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
         

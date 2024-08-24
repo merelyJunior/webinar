@@ -4,7 +4,6 @@ import pool from '/app/connection';
 const clients = []; // Массив для хранения подключенных клиентов
 
 // Функция для получения состояния потока из базы данных
-
 async function getStreamStatus(streamId) {
   const client = await pool.connect();
   try {
@@ -20,6 +19,7 @@ async function getStreamStatus(streamId) {
   }
 }
 
+// Функция для обновления состояния потока в базе данных
 async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
   const client = await pool.connect();
   try {
@@ -35,8 +35,9 @@ async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
 }
 
 export async function GET(req) {
-  const client = await pool.connect(); 
+  const client = await pool.connect(); // Получаем клиента из пула
   try {
+    // Получаем startTime и scenarioId из базы данных
     const queryStream = `
       SELECT id, start_date, scenario_id
       FROM streams
@@ -51,14 +52,16 @@ export async function GET(req) {
 
     const { id: streamId, start_date: startTime, scenario_id: scenarioId } = streamRows[0];
     
+    // Получаем состояние потока
     let { is_scheduled: isScheduled, previous_start_time: previousStartTime } = await getStreamStatus(streamId);
 
     // Сбрасываем isScheduled, если время начала изменилось
-    if (previousStartTime !== startTime) {
-      isScheduled = false;
-      await updateStreamStatus(streamId, isScheduled, startTime);
-    }
+    // if (previousStartTime !== startTime) {
+    //   isScheduled = false;
+    //   await updateStreamStatus(streamId, isScheduled, startTime);
+    // }
 
+    // Получаем сценарий комментариев по scenarioId
     const queryScenario = `
       SELECT scenario_text
       FROM scenario
@@ -73,50 +76,52 @@ export async function GET(req) {
 
     // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
-      // Обновляем статус до начала планирования, чтобы избежать повторного выполнения при параллельных запросах
       isScheduled = true;
-      await updateStreamStatus(streamId, isScheduled, startTime);
 
-      // Планируем комментарии из базы данных
+      // // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
-        console.log(startTime);
-        
-        // Проверяем, существует ли уже запланированное задание
-        const existingJob = schedule.scheduledJobs[sender + text + scheduleTime];
-        if (!existingJob) {
-          schedule.scheduleJob(sender + text + scheduleTime, new Date(scheduleTime), async () => {
-            const message = {
-              id: Date.now(), 
-              sender,
-              text,
-              sendingTime: new Date().toLocaleTimeString(), 
-              pinned: pinned || false
-            };
 
-            await saveMessageToDb(message);
-            broadcastMessages(message, sender); 
-          });
-        }
+        schedule.scheduleJob(new Date(scheduleTime), async () => {
+          const message = {
+            id: Date.now(), // Генерация уникального ID на основе времени
+            sender,
+            text,
+            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            pinned: pinned || false
+          };
+
+          // Сохраняем сообщение в базе данных
+          await saveMessageToDb(message);
+          broadcastMessages(message, sender); // Обновляем всех клиентов
+        });
       });
+
+      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
     }
 
+    // Создание нового потока данных для отправки сообщений клиентам
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
 
+    // Логирование подключения клиента
     console.log('Клиент подключился');
     
+    // Добавление нового клиента в список
     clients.push(writer);
 
-    const currentMessages = await loadMessagesFromDb(); 
+    // Отправка текущих сообщений новому клиенту
+    const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
     writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
 
+    // Очистка при закрытии соединения
     const onClose = () => {
       console.log('Клиент отключился');
       clients.splice(clients.indexOf(writer), 1);
     };
     writer.closed.then(onClose, onClose);
 
+    // Создание ответа
     const response = new NextResponse(readable, {
       headers: {
         'Content-Type': 'text/event-stream',
@@ -130,11 +135,10 @@ export async function GET(req) {
     console.error('Ошибка в API маршруте startStream:', error);
     return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
   } finally {
-    client.release();
+    client.release(); // Освобождаем клиента
     console.log('Соединение с базой данных закрыто');
   }
 }
-
 
 export async function POST(request) {
   try {
