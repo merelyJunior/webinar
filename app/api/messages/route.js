@@ -42,9 +42,9 @@ export async function GET(req) {
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
 
-    if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
-      throw new Error('Сценарий пуст или отсутствует');
-    }
+    // if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
+    //   throw new Error('Сценарий пуст или отсутствует');
+    // }
 
     // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
