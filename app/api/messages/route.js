@@ -113,28 +113,25 @@ export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
 
-    if (!Array.isArray(newMessages)) {
-      console.error('newMessages должен быть массивом');
+    if (!Array.isArray(newMessages) || newMessages.length !== 1) {
+      console.error('newMessages должен быть массивом с одним элементом');
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
     }
 
-    // Обработка новых сообщений
-    for (const message of newMessages) {
-      // Отправляем сообщение клиентам
-      broadcastMessages([message], sender);
+    let message = newMessages[0];
 
-      // Сохраняем сообщение в базу данных
-      await saveMessageToDb(message);
-    }
+    // Добавляем дату и время отправки
+    message.sendingTime = new Date().toLocaleTimeString();
+    // Сохраняем сообщение в базу данных
+    await saveMessageToDb(message);
+
+    // Отправляем сообщение клиентам после сохранения
+    broadcastMessages([message], sender);
 
     // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
-
-    // Обновляем всех клиентов
-    const currentMessages = await loadMessagesFromDb();
-    broadcastMessages(currentMessages, sender);
 
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
@@ -143,11 +140,17 @@ export async function POST(request) {
   }
 }
 
-async function broadcastMessages(messages, excludeSender) {
+async function broadcastMessages(newMessages, excludeSender) {
+  // Загружаем текущие сообщения из базы данных
+  const currentMessages = await loadMessagesFromDb();
+
+  // Объединяем текущие сообщения с новыми
+  const combinedMessages = [...currentMessages, ...newMessages];
+
   const messagePayload = {
     messages: excludeSender
-      ? messages.filter(msg => msg.sender !== excludeSender)
-      : messages,
+      ? combinedMessages.filter(msg => msg.sender !== excludeSender)
+      : combinedMessages,
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
@@ -162,8 +165,8 @@ async function broadcastMessages(messages, excludeSender) {
 
 
 
-
 async function saveMessageToDb(message) {
+  
   const client = await pool.connect();
   try {
     const insertQuery = `

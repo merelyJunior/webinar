@@ -54,9 +54,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       pinned: false
     };
 
-    // Добавляем сообщение в visibleMessages для мгновенного отображения
-    setVisibleMessages((prevMessages) => [message, ...prevMessages]);
-
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
@@ -64,17 +61,8 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         body: JSON.stringify({ newMessages: [message] }) 
       });
 
-      if (!response.ok) {
-        console.error('Ошибка при отправке сообщения:', await response.text());
-        // Удаляем сообщение из visibleMessages, если возникла ошибка
-        setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
-        return;
-      }
-
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-      // Удаляем сообщение из visibleMessages, если возникла ошибка
-      setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
     }
     
   };
