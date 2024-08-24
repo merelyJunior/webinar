@@ -73,7 +73,6 @@ export async function GET(req) {
         });
       });
     }
-    }
 
     // Создание нового потока данных для отправки сообщений клиентам
     const { readable, writable } = new TransformStream();
