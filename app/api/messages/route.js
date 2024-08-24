@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
-
+import pool from '/app/connection'; 
 const clients = []; // Массив для хранения подключенных клиентов
+
+// Функция для получения состояния потока из базы данных
 async function getStreamStatus(streamId) {
   const client = await pool.connect();
   try {
@@ -10,8 +11,6 @@ async function getStreamStatus(streamId) {
       SELECT is_scheduled, previous_start_time
       FROM streams
       WHERE id = $1
-      ORDER BY id DESC
-      LIMIT 1
     `;
     const { rows } = await client.query(query, [streamId]);
     return rows[0] || { is_scheduled: false, previous_start_time: null };
@@ -25,29 +24,11 @@ async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
   const client = await pool.connect();
   try {
     const query = `
-      INSERT INTO streams (id, is_scheduled, previous_start_time)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (id) 
-      DO UPDATE SET is_scheduled = $2, previous_start_time = $3
+      UPDATE streams
+      SET is_scheduled = $2, previous_start_time = $3
+      WHERE id = $1
     `;
     await client.query(query, [streamId, isScheduled, previousStartTime]);
-  } finally {
-    client.release();
-  }
-}
-
-// Функция для вставки записи в таблицу execution_logs
-async function logExecution(streamId) {
-  const client = await pool.connect();
-  try {
-    const query = `
-      INSERT INTO execution_logs (stream_id)
-      VALUES ($1)
-    `;
-    await client.query(query, [streamId]);
-    console.log('Запись успешно добавлена в execution_logs для потока:', streamId);
-  } catch (error) {
-    console.error('Ошибка при добавлении записи в execution_logs:', error);
   } finally {
     client.release();
   }
@@ -74,14 +55,11 @@ export async function GET(req) {
     // Получаем состояние потока
     let { is_scheduled: isScheduled, previous_start_time: previousStartTime } = await getStreamStatus(streamId);
 
-    console.log('Текущее состояние isScheduled:', isScheduled);
-
     // Сбрасываем isScheduled, если время начала изменилось
-    if (previousStartTime !== startTime) {
-      console.log('Время начала изменилось, сбрасываем isScheduled в false');
-      isScheduled = false;
-      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
-    }
+    // if (previousStartTime !== startTime) {
+    //   isScheduled = false;
+    //   await updateStreamStatus(streamId, isScheduled, startTime);
+    // }
 
     // Получаем сценарий комментариев по scenarioId
     const queryScenario = `
@@ -90,7 +68,7 @@ export async function GET(req) {
       WHERE id = $1
     `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = JSON.parse(scenarioRows[0]?.scenario_text || '[]'); // Парсинг текста сценария в массив
+    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]'; // Парсинг текста сценария в массив
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
       throw new Error('Сценарий пуст или отсутствует');
@@ -98,16 +76,28 @@ export async function GET(req) {
 
     // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
-      console.log('Планирование комментариев');
       isScheduled = true;
 
-      // Логируем выполнение
-      await logExecution(streamId);
+      // // Планируем комментарии из базы данных
+      commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
+        const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
 
-      // Обновляем состояние
-      await updateStreamStatus(streamId, isScheduled, startTime);
-    } else {
-      console.log('Комментарии уже запланированы, пропускаем');
+        schedule.scheduleJob(new Date(scheduleTime), async () => {
+          const message = {
+            id: Date.now(), // Генерация уникального ID на основе времени
+            sender,
+            text,
+            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            pinned: pinned || false
+          };
+
+          // Сохраняем сообщение в базе данных
+          await saveMessageToDb(message);
+          broadcastMessages(message, sender); // Обновляем всех клиентов
+        });
+      });
+
+      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
     }
 
     // Создание нового потока данных для отправки сообщений клиентам
@@ -149,6 +139,7 @@ export async function GET(req) {
     console.log('Соединение с базой данных закрыто');
   }
 }
+
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
