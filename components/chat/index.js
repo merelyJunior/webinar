@@ -15,12 +15,13 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     eventSource.onmessage = (event) => {
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
-    
+
         console.log('Получено сообщение через SSE:', messages);
-    
+
         setClientsCount(clientsCount);
         if (messages) {
           setVisibleMessages((prevMessages) => {
+            console.log('Предыдущие сообщения:', prevMessages);
             const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
             const uniqueNewMessages = messages.filter((msg) => !prevMessageIds.has(msg.id));
             console.log('Новые уникальные сообщения для добавления в состояние:', uniqueNewMessages);
@@ -49,38 +50,58 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
-  
+
     const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(),
+      sendingTime: new Date().toLocaleTimeString(), // Добавляем локальную временную метку
       pinned: false
     };
-  
+
     console.log('Отправляем сообщение на сервер:', tempMessage);
-  
+
     // Добавляем сообщение в visibleMessages немедленно
-    setVisibleMessages((prevMessages) => [tempMessage, ...prevMessages]);
-  
+    setVisibleMessages((prevMessages) => {
+      console.log('Добавляем временное сообщение в состояние:', tempMessage);
+      return [tempMessage, ...prevMessages];
+    });
+
     setComment('');
-  
+
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newMessages: [tempMessage] })
       });
-  
-      if (!response.ok) {
+
+      if (response.ok) {
+        const serverResponse = await response.json();
+        console.log('Ответ сервера с сообщением:', serverResponse);
+        if (serverResponse && serverResponse.length > 0) {
+          setVisibleMessages((prevMessages) => {
+            console.log('Сообщения до добавления ответа от сервера:', prevMessages);
+            const newMessages = serverResponse.filter(
+              (msg) => !prevMessages.some((prevMsg) => prevMsg.id === msg.id)
+            );
+            console.log('Сообщения для добавления после ответа от сервера:', newMessages);
+            return [...newMessages, ...prevMessages];
+          });
+        }
+      } else {
         console.error('Ошибка при отправке сообщения');
-        // В случае ошибки удаляем сообщение из visibleMessages
-        setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
+        setVisibleMessages((prevMessages) => {
+          console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
+          return prevMessages.filter(msg => msg.id !== tempMessage.id);
+        });
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-      // В случае ошибки удаляем сообщение из visibleMessages
-      setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
+      setVisibleMessages((prevMessages) => {
+        console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
+        return prevMessages.filter(msg => msg.id !== tempMessage.id);
+      });
     }
   };
 
