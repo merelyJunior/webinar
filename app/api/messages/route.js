@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
+import pool from '/app/connection'; 
 
 let isScheduled = false;
 let previousStartTime = null;
 
-const clients = []; // Массив для хранения подключенных клиентов
+const clients = []; 
 
 export async function GET(req) {
   const client = await pool.connect(); // Получаем клиента из пула
@@ -111,64 +111,81 @@ export async function GET(req) {
 }
 export async function POST(request) {
   try {
-    const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
 
+    const body = await request.json();
+
+    const { newMessages = [], pinnedMessageId, unpin, sender } = body;
+
+    // Проверка корректности данных
     if (!Array.isArray(newMessages) || newMessages.length !== 1) {
       console.error('newMessages должен быть массивом с одним элементом');
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
     }
 
     let message = newMessages[0];
-
-    // Добавляем дату и время отправки
     message.sendingTime = new Date().toLocaleTimeString();
-    // Сохраняем сообщение в базу данных
     await saveMessageToDb(message);
 
-    // Отправляем сообщение клиентам после сохранения
     broadcastMessages([message], sender);
+    console.log('Сообщение отправлено клиентам');
 
     // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
+      console.log(`Обновление статуса закрепленного сообщения: ${pinnedMessageId}, unpin: ${unpin}`);
       await updatePinnedStatus(pinnedMessageId, !unpin);
+      console.log('Статус закрепленного сообщения обновлен');
     }
 
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
-    console.error('Ошибка при обновлении сообщения:', error);
+    console.error('Ошибка при обработке POST-запроса:', error);
     return NextResponse.json({ message: 'Ошибка сервера' }, { status: 500 });
   }
 }
 
-async function broadcastMessages(newMessages, excludeSender) {
-  // Загружаем текущие сообщения из базы данных
-  const currentMessages = await loadMessagesFromDb();
+async function broadcastMessages(newMessages = [], excludeSender) {
+  try {
+    // Логируем получение новых сообщений
+    console.log('Получены новые сообщения для трансляции:', newMessages);
 
-  // Объединяем текущие сообщения с новыми
-  const combinedMessages = [...currentMessages, ...newMessages];
+    // Формируем payload для отправки клиентам
+    const messagePayload = {
+      messages: excludeSender
+        ? newMessages.filter(msg => msg.sender !== excludeSender)
+        : newMessages,
+      clientsCount: clients.length
+    };
+    const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
 
-  const messagePayload = {
-    messages: excludeSender
-      ? combinedMessages.filter(msg => msg.sender !== excludeSender)
-      : combinedMessages,
-    clientsCount: clients.length
-  };
-  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
-
-  clients.forEach(client => {
-    client.write(messageData).catch(err => {
-      console.error('Ошибка при отправке сообщения клиенту:', err);
-      clients.splice(clients.indexOf(client), 1);
+    // Логируем сформированные данные для отправки клиентам
+    console.log('Отправляем сообщение следующим клиентам:');
+    clients.forEach((client, index) => {
+      console.log(`Клиент ${index + 1}:`);
+      console.log('Сообщение:', messageData);
+      client.write(messageData).catch(err => {
+        console.error('Ошибка при отправке сообщения клиенту:', err);
+        // Удаляем клиента из списка, если произошла ошибка при отправке
+        const clientIndex = clients.indexOf(client);
+        if (clientIndex !== -1) {
+          clients.splice(clientIndex, 1);
+          console.log('Клиент удален из списка из-за ошибки отправки');
+        }
+      });
     });
-  });
+
+    // Логируем успешную отправку
+    console.log('Сообщения успешно отправлены всем клиентам');
+  } catch (error) {
+    // Логируем любую ошибку, которая могла возникнуть в процессе
+    console.error('Ошибка в процессе трансляции сообщений:', error);
+  }
 }
 
-
-
 async function saveMessageToDb(message) {
-  
   const client = await pool.connect();
   try {
+    console.log('Сохраняем сообщение в базу данных:', message);
+
     const insertQuery = `
       INSERT INTO messages (id, sender, text, sending_time, pinned)
       VALUES ($1, $2, $3, $4, $5)
@@ -177,16 +194,17 @@ async function saveMessageToDb(message) {
       message.id,
       message.sender,
       message.text,
-      message.sendingTime,
+      new Date().toISOString(), // Используем текущую дату и время
       message.pinned,
     ]);
+
+    console.log('Сообщение успешно сохранено в базу данных');
   } catch (error) {
     console.error('Ошибка при сохранении сообщения в базе данных:', error);
   } finally {
     client.release();
   }
 }
-
 async function loadMessagesFromDb() {
   const client = await pool.connect();
   try {

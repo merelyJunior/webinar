@@ -11,16 +11,21 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   useEffect(() => {
     const eventSource = new EventSource('/api/messages');
-   
-    
+
     eventSource.onmessage = (event) => {
-      console.log(event.data);
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
-        
+    
+        console.log('Получено сообщение через SSE:', messages);
+    
         setClientsCount(clientsCount);
         if (messages) {
-          setVisibleMessages(messages);
+          setVisibleMessages((prevMessages) => {
+            const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
+            const uniqueNewMessages = messages.filter((msg) => !prevMessageIds.has(msg.id));
+            console.log('Новые уникальные сообщения для добавления в состояние:', uniqueNewMessages);
+            return [...uniqueNewMessages, ...prevMessages];
+          });
         }
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
@@ -45,26 +50,44 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
 
-    setComment('');
-    const message = {
+    const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: null,
+      sendingTime: new Date().toLocaleTimeString(), // Добавляем локальную временную метку
       pinned: false
     };
+
+    console.log('Отправляем сообщение на сервер:', tempMessage);
+
+    // Убираем добавление временного сообщения в локальный state
+    setComment('');
 
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newMessages: [message] }) 
+        body: JSON.stringify({ newMessages: [tempMessage] })
       });
 
+      if (response.ok) {
+        const serverResponse = await response.json();
+        console.log('Ответ сервера с сообщением:', serverResponse);
+        if (serverResponse && serverResponse.length > 0) {
+          setVisibleMessages((prevMessages) => {
+            const newMessages = serverResponse.filter(
+              (msg) => !prevMessages.some((prevMsg) => prevMsg.id === msg.id)
+            );
+            console.log('Сообщения для добавления после ответа от сервера:', newMessages);
+            return [...newMessages, ...prevMessages];
+          });
+        }
+      } else {
+        console.error('Ошибка при отправке сообщения');
+      }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
     }
-    
   };
 
   const handleScroll = () => {
