@@ -3,7 +3,6 @@ import schedule from 'node-schedule';
 import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
 
 const clients = []; // Массив для хранения подключенных клиентов
-
 async function getStreamStatus(streamId) {
   const client = await pool.connect();
   try {
@@ -150,98 +149,6 @@ export async function GET(req) {
     console.log('Соединение с базой данных закрыто');
   }
 }
-
-export async function GET(req) {
-  const client = await pool.connect(); // Получаем клиента из пула
-  try {
-    // Получаем startTime и scenarioId из базы данных
-    const queryStream = `
-      SELECT id, start_date, scenario_id
-      FROM streams
-      ORDER BY start_date DESC
-      LIMIT 1
-    `;
-    const { rows: streamRows } = await client.query(queryStream);
-    
-    if (streamRows.length === 0) {
-      throw new Error('Не удалось найти время начала или ID сценария');
-    }
-
-    const { id: streamId, start_date: startTime, scenario_id: scenarioId } = streamRows[0];
-    
-    // Получаем состояние потока
-    let { is_scheduled: isScheduled, previous_start_time: previousStartTime } = await getStreamStatus(streamId);
-
-    // Сбрасываем isScheduled, если время начала изменилось
-    if (previousStartTime !== startTime) {
-      isScheduled = false;
-      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
-    }
-
-    // Получаем сценарий комментариев по scenarioId
-    const queryScenario = `
-      SELECT scenario_text
-      FROM scenario
-      WHERE id = $1
-    `;
-    const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]'; // Парсинг текста сценария в массив
-
-    if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
-      throw new Error('Сценарий пуст или отсутствует');
-    }
-
-    // Проверяем, было ли уже запланировано выполнение комментариев
-    if (!isScheduled) {
-      isScheduled = true;
-
-      // Логируем выполнение
-      await logExecution(streamId);
-
-      // Обновляем состояние
-      await updateStreamStatus(streamId, isScheduled, startTime);
-    }
-
-    // Создание нового потока данных для отправки сообщений клиентам
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-
-    // Логирование подключения клиента
-    console.log('Клиент подключился');
-    
-    // Добавление нового клиента в список
-    clients.push(writer);
-
-    // Отправка текущих сообщений новому клиенту
-    const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
-    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
-
-    // Очистка при закрытии соединения
-    const onClose = () => {
-      console.log('Клиент отключился');
-      clients.splice(clients.indexOf(writer), 1);
-    };
-    writer.closed.then(onClose, onClose);
-
-    // Создание ответа
-    const response = new NextResponse(readable, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-
-    return response;
-  } catch (error) {
-    console.error('Ошибка в API маршруте startStream:', error);
-    return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
-  } finally {
-    client.release(); // Освобождаем клиента
-    console.log('Соединение с базой данных закрыто');
-  }
-}
-
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
