@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
-import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
+import pool from '/app/connection';
 
 let isScheduled = false;
 let previousStartTime = null;
 
-const clients = []; // Массив для хранения подключенных клиентов
-
 export async function GET(req) {
-  const client = await pool.connect(); // Получаем клиента из пула
+  const client = await pool.connect();
   try {
-    // Получаем startTime и scenarioId из базы данных
     const queryStream = `
       SELECT start_date, scenario_id
       FROM streams
@@ -26,13 +23,11 @@ export async function GET(req) {
       throw new Error('Не удалось найти время начала или ID сценария');
     }
 
-    // Сбрасываем isScheduled, если время начала изменилось
     if (previousStartTime !== startTime) {
       isScheduled = false;
-      previousStartTime = startTime; // Обновляем предыдущее время начала
+      previousStartTime = startTime;
     }
 
-    // Получаем сценарий комментариев по scenarioId
     const queryScenario = `
       SELECT scenario_text
       FROM scenario
@@ -45,53 +40,43 @@ export async function GET(req) {
       throw new Error('Сценарий пуст или отсутствует');
     }
 
-    // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
       isScheduled = true;
 
-      // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
 
         schedule.scheduleJob(new Date(scheduleTime), async () => {
           const message = {
-            id: Date.now(), // Генерация уникального ID на основе времени
+            id: Date.now(),
             sender,
             text,
-            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            sendingTime: new Date().toLocaleTimeString(),
             pinned: pinned || false
           };
 
-          // Сохраняем сообщение в базе данных
           await saveMessageToDb(message);
           broadcastMessages(); // Обновляем всех клиентов
         });
       });
     }
 
-    // Создание нового потока данных для отправки сообщений клиентам
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
 
-    // Логирование подключения клиента
     console.log('Клиент подключился');
-    
-    // Добавление нового клиента в список
-    clients.push(writer);
+    await addClientToDb(writer);
 
-    // Отправка текущих сообщений новому клиенту
-    const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
-    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
+    const currentMessages = await loadMessagesFromDb();
+    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: await getClientsCount() })}\n\n`);
 
-    // Очистка при закрытии соединения
-    const onClose = () => {
+    const onClose = async () => {
       console.log('Клиент отключился');
-      clients.splice(clients.indexOf(writer), 1);
+      await removeClientFromDb(writer);
       broadcastMessages(); // Уведомление остальных клиентов о новом количестве клиентов
     };
     writer.closed.then(onClose, onClose);
 
-    // Создание ответа
     const response = new NextResponse(readable, {
       headers: {
         'Content-Type': 'text/event-stream',
@@ -105,10 +90,11 @@ export async function GET(req) {
     console.error('Ошибка в API маршруте startStream:', error);
     return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
   } finally {
-    client.release(); // Освобождаем клиента
+    client.release();
     console.log('Соединение с базой данных закрыто');
   }
 }
+
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
@@ -118,19 +104,15 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
     }
 
-    // Обработка новых сообщений
     for (const message of newMessages) {
-      // Добавляем время создания на сервере
       message.sendingTime = new Date().toLocaleTimeString();
       await saveMessageToDb(message);
     }
 
-    // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
-    // Обновляем всех клиентов
     const currentMessages = await loadMessagesFromDb();
     broadcastMessages(currentMessages, sender);
 
@@ -142,6 +124,7 @@ export async function POST(request) {
 }
 
 async function broadcastMessages(messages, excludeSender) {
+  const clients = await getClients();
   const messagePayload = {
     messages: excludeSender
       ? messages.filter(msg => msg.sender !== excludeSender)
@@ -149,17 +132,55 @@ async function broadcastMessages(messages, excludeSender) {
     clientsCount: clients.length
   };
   const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
-
+  console.log(clients);
+  
   clients.forEach(client => {
     client.write(messageData).catch(err => {
       console.error('Ошибка при отправке сообщения клиенту:', err);
-      clients.splice(clients.indexOf(client), 1);
     });
   });
 }
 
+async function addClientToDb(writer) {
+  const client = await pool.connect();
+  try {
+    const connectionId = writer.id || Date.now().toString();
+    await client.query('INSERT INTO clients (connection_id) VALUES ($1) ON CONFLICT (connection_id) DO NOTHING', [connectionId]);
+    writer.id = connectionId;
+  } catch (error) {
+    console.error('Ошибка при добавлении клиента в базу данных:', error);
+  } finally {
+    client.release();
+  }
+}
 
+async function removeClientFromDb(writer) {
+  const client = await pool.connect();
+  try {
+    if (writer.id) {
+      await client.query('DELETE FROM clients WHERE connection_id = $1', [writer.id]);
+    }
+  } catch (error) {
+    console.error('Ошибка при удалении клиента из базы данных:', error);
+  } finally {
+    client.release();
+  }
+}
 
+async function getClients() {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query('SELECT connection_id FROM clients');
+    return rows.map(row => ({
+      id: row.connection_id
+    }));
+  } catch (error) {
+    console.error('Ошибка при получении клиентов из базы данных:', error);
+    return [];
+  } finally {
+    client.release();
+  }
+}
 
 async function saveMessageToDb(message) {
   const client = await pool.connect();
@@ -203,7 +224,20 @@ async function updatePinnedStatus(messageId, pinned) {
     const updateQuery = 'UPDATE messages SET pinned = $1 WHERE id = $2';
     await client.query(updateQuery, [pinned, messageId]);
   } catch (error) {
-    console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
+    console.error('Ошибка при обновлении статуса закрепления сообщения:', error);
+  } finally {
+    client.release();
+  }
+}
+
+async function getClientsCount() {
+  const client = await pool.connect();
+  try {
+    const { rowCount } = await client.query('SELECT COUNT(*) FROM clients');
+    return parseInt(rowCount, 10);
+  } catch (error) {
+    console.error('Ошибка при получении количества клиентов:', error);
+    return 0;
   } finally {
     client.release();
   }
