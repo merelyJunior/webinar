@@ -5,12 +5,14 @@ import pool from '/app/connection'; // Убедитесь, что путь к po
 let isScheduled = false;
 let previousStartTime = null;
 
-const clients = []; // Массив для хранения подключенных клиентов
-
 export async function GET(req) {
-  const client = await pool.connect(); // Получаем клиента из пула
+  const client = await pool.connect();
   try {
-    // Получаем startTime и scenarioId из базы данных
+    const connectionId = req.headers.get('Connection-Id');
+    if (!connectionId) throw new Error('Отсутствует идентификатор соединения');
+
+    await addClient(connectionId);
+
     const queryStream = `
       SELECT start_date, scenario_id
       FROM streams
@@ -26,13 +28,11 @@ export async function GET(req) {
       throw new Error('Не удалось найти время начала или ID сценария');
     }
 
-    // Сбрасываем isScheduled, если время начала изменилось
     if (previousStartTime !== startTime) {
       isScheduled = false;
-      previousStartTime = startTime; // Обновляем предыдущее время начала
+      previousStartTime = startTime;
     }
 
-    // Получаем сценарий комментариев по scenarioId
     const queryScenario = `
       SELECT scenario_text
       FROM scenario
@@ -45,53 +45,35 @@ export async function GET(req) {
       throw new Error('Сценарий пуст или отсутствует');
     }
 
-    // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
       isScheduled = true;
 
-      // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
 
         schedule.scheduleJob(new Date(scheduleTime), async () => {
           const message = {
-            id: Date.now(), // Генерация уникального ID на основе времени
+            id: Date.now(),
             sender,
             text,
-            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            sendingTime: new Date().toLocaleTimeString(),
             pinned: pinned || false
           };
 
-          // Сохраняем сообщение в базе данных
           await saveMessageToDb(message);
-          broadcastMessages(); // Обновляем всех клиентов
+          await broadcastMessages(); // Обновляем всех клиентов
         });
       });
     }
 
-    // Создание нового потока данных для отправки сообщений клиентам
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
 
-    // Логирование подключения клиента
-    console.log('Клиент подключился');
-    
-    // Добавление нового клиента в список
-    clients.push(writer);
+    writer.closed.then(() => removeClient(connectionId));
 
-    // Отправка текущих сообщений новому клиенту
-    const currentMessages = await loadMessagesFromDb(); // Загрузка сообщений из базы данных
-    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: clients.length })}\n\n`);
+    const currentMessages = await loadMessagesFromDb();
+    writer.write(`data: ${JSON.stringify({ messages: currentMessages, clientsCount: 1 })}\n\n`);
 
-    // Очистка при закрытии соединения
-    const onClose = () => {
-      console.log('Клиент отключился');
-      clients.splice(clients.indexOf(writer), 1);
-      broadcastMessages(); // Уведомление остальных клиентов о новом количестве клиентов
-    };
-    writer.closed.then(onClose, onClose);
-
-    // Создание ответа
     const response = new NextResponse(readable, {
       headers: {
         'Content-Type': 'text/event-stream',
@@ -105,10 +87,11 @@ export async function GET(req) {
     console.error('Ошибка в API маршруте startStream:', error);
     return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
   } finally {
-    client.release(); // Освобождаем клиента
+    client.release();
     console.log('Соединение с базой данных закрыто');
   }
 }
+
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
@@ -118,26 +101,18 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
     }
 
-    // Обработка новых сообщений
     for (const message of newMessages) {
-      // Добавляем время создания на сервере
       message.sendingTime = new Date().toLocaleTimeString();
 
-      // Отправляем сообщение клиентам
-      broadcastMessages([message], sender);
-
-      // Сохраняем сообщение в базу данных
       await saveMessageToDb(message);
     }
 
-    // Обновление закрепленных сообщений
     if (pinnedMessageId !== undefined) {
       await updatePinnedStatus(pinnedMessageId, !unpin);
     }
 
-    // Обновляем всех клиентов
     const currentMessages = await loadMessagesFromDb();
-    broadcastMessages(currentMessages, sender);
+    await broadcastMessages(currentMessages, sender);
 
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
@@ -146,25 +121,29 @@ export async function POST(request) {
   }
 }
 
-async function broadcastMessages(messages, excludeSender) {
-  const messagePayload = {
-    messages: excludeSender
-      ? messages.filter(msg => msg.sender !== excludeSender)
-      : messages,
-    clientsCount: clients.length
-  };
-  const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
+async function broadcastMessages() {
+  const client = await pool.connect();
+  try {
+    const query = 'SELECT connection_id FROM clients';
+    const { rows } = await client.query(query);
+    const clientIds = rows.map(row => row.connection_id);
 
-  clients.forEach(client => {
-    client.write(messageData).catch(err => {
-      console.error('Ошибка при отправке сообщения клиенту:', err);
-      clients.splice(clients.indexOf(client), 1);
+    const messagePayload = {
+      messages: await loadMessagesFromDb(),
+      clientsCount: clientIds.length
+    };
+    const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
+
+    clientIds.forEach(clientId => {
+      // Implement sending messages to the clients based on their connection_id
+      // This needs SSE implementation based on connection_id
     });
-  });
+  } catch (error) {
+    console.error('Ошибка при отправке сообщений клиентам:', error);
+  } finally {
+    client.release();
+  }
 }
-
-
-
 
 async function saveMessageToDb(message) {
   const client = await pool.connect();
@@ -209,6 +188,28 @@ async function updatePinnedStatus(messageId, pinned) {
     await client.query(updateQuery, [pinned, messageId]);
   } catch (error) {
     console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
+  } finally {
+    client.release();
+  }
+}
+
+async function addClient(connectionId) {
+  const client = await pool.connect();
+  try {
+    await client.query('INSERT INTO clients (connection_id) VALUES ($1)', [connectionId]);
+  } catch (error) {
+    console.error('Ошибка при добавлении клиента в базу данных:', error);
+  } finally {
+    client.release();
+  }
+}
+
+async function removeClient(connectionId) {
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM clients WHERE connection_id = $1', [connectionId]);
+  } catch (error) {
+    console.error('Ошибка при удалении клиента из базы данных:', error);
   } finally {
     client.release();
   }
