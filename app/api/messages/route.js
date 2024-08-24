@@ -52,10 +52,12 @@ export async function GET(req) {
       // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
-
-        // Логируем время начала отправки
+    
+        // Логируем текущее время сервера и время начала отправки
+        const currentTime = new Date();
+        console.log(`Текущее время сервера: ${currentTime.toLocaleString()}`);
         console.log(`Отправка сообщения начнется в: ${new Date(scheduleTime).toLocaleString()}`);
-
+    
         schedule.scheduleJob(new Date(scheduleTime), async () => {
           const message = {
             id: Date.now(), // Генерация уникального ID на основе времени
@@ -64,12 +66,13 @@ export async function GET(req) {
             sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
             pinned: pinned || false
           };
-
+    
           // Сохраняем сообщение в базе данных
           await saveMessageToDb(message);
           broadcastMessages(); // Обновляем всех клиентов
         });
       });
+    }
     }
 
     // Создание нового потока данных для отправки сообщений клиентам
