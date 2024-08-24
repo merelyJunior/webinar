@@ -68,12 +68,13 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         return;
       }
 
-      setComment('');
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
       // Удаляем сообщение из visibleMessages, если возникла ошибка
       setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
     }
+    
+    setComment('');
   };
 
   const handleScroll = () => {
