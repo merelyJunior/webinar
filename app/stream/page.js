@@ -41,10 +41,10 @@ const HomePage = () => {
   
       const { start_date, video_duration, scenario_id, video_id } = streamsData;
       
-      // Преобразование времени начала в локальное время пользователя
-      const startTimeUtc = new Date(start_date);
-      const startTime = new Date(startTimeUtc.getTime() - startTimeUtc.getTimezoneOffset() * 60000);
-  
+      // Преобразование времени начала в объект Date с учетом временной зоны
+      const startTime = new Date(start_date);
+      console.log(startTime);
+      
       if (isNaN(startTime.getTime())) {
         console.error('Invalid start date');
         return;

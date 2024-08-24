@@ -17,26 +17,20 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
   
-        console.log('Получено сообщение через SSE:', messages);
-  
         setClientsCount(clientsCount);
         if (messages) {
           setVisibleMessages((prevMessages) => {
-            console.log('Предыдущие сообщения:', prevMessages);
             const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
             const uniqueNewMessages = messages.filter((msg) => {
               if (prevMessageIds.has(msg.id)) {
-                console.log(`Сообщение с id ${msg.id} уже существует и не будет добавлено.`);
                 return false;
               }
               if (sentMessageIds.current.has(msg.id)) {
-                console.log(`Сообщение с id ${msg.id} было отправлено с этого клиента и не будет добавлено.`);
                 sentMessageIds.current.delete(msg.id); // Удаляем из временного списка отправленных сообщений
                 return false;
               }
               return true;
             });
-            console.log('Новые уникальные сообщения для добавления в состояние:', uniqueNewMessages);
             return [...uniqueNewMessages, ...prevMessages];
           });
         }
@@ -47,7 +41,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   
     return () => {
       eventSource.close();
-      console.log('SSE-соединение закрыто');
     };
   }, []);
 
@@ -72,7 +65,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       pinned: false
     };
 
-    console.log('Отправляем сообщение на сервер:', tempMessage);
 
     setVisibleMessages((prevMessages) => {
   
