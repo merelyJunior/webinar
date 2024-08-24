@@ -145,10 +145,6 @@ export async function POST(request) {
 
 async function broadcastMessages(newMessages = [], excludeSender) {
   try {
-    // Логируем получение новых сообщений
-    console.log('Получены новые сообщения для трансляции:', newMessages);
-
-    // Формируем payload для отправки клиентам
     const messagePayload = {
       messages: excludeSender
         ? newMessages.filter(msg => msg.sender !== excludeSender)
@@ -157,14 +153,9 @@ async function broadcastMessages(newMessages = [], excludeSender) {
     };
     const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
 
-    // Логируем сформированные данные для отправки клиентам
-    console.log('Отправляем сообщение следующим клиентам:');
+  
     clients.forEach((client, index) => {
-      console.log(`Клиент ${index + 1}:`);
-      console.log('Сообщение:', messageData);
       client.write(messageData).catch(err => {
-        console.error('Ошибка при отправке сообщения клиенту:', err);
-        // Удаляем клиента из списка, если произошла ошибка при отправке
         const clientIndex = clients.indexOf(client);
         if (clientIndex !== -1) {
           clients.splice(clientIndex, 1);

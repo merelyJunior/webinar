@@ -56,7 +56,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
-
+  
     const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
@@ -64,27 +64,32 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       sendingTime: new Date().toLocaleTimeString(),
       pinned: false
     };
-
+  
     console.log('Отправляем сообщение на сервер:', tempMessage);
-
-    // Добавляем сообщение в visibleMessages немедленно
+  
     setVisibleMessages((prevMessages) => {
       console.log('Добавляем временное сообщение в состояние:', tempMessage);
       return [tempMessage, ...prevMessages];
     });
-
+  
     setComment('');
-
+  
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newMessages: [tempMessage] })
       });
-
+  
       if (response.ok) {
         const serverResponse = await response.json();
         console.log('Ответ сервера с сообщением:', serverResponse);
+  
+        // Логируем и сравниваем серверное сообщение с временным
+        serverResponse.forEach((msg, index) => {
+          console.log(`Сравнение временного сообщения с серверным (${index}):`, msg, tempMessage);
+        });
+  
         if (serverResponse && serverResponse.length > 0) {
           setVisibleMessages((prevMessages) => {
             console.log('Сообщения до добавления ответа от сервера:', prevMessages);
