@@ -5,6 +5,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const [justSentMessageIds, setJustSentMessageIds] = useState(new Set());
 
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -21,12 +22,16 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         setClientsCount(clientsCount);
         if (messages) {
           setVisibleMessages((prevMessages) => {
-            console.log('Предыдущие сообщения:', prevMessages);
             const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
-            const uniqueNewMessages = messages.filter((msg) => !prevMessageIds.has(msg.id));
+            const uniqueNewMessages = messages.filter(
+              (msg) => !prevMessageIds.has(msg.id) && !justSentMessageIds.has(msg.id)
+            );
             console.log('Новые уникальные сообщения для добавления в состояние:', uniqueNewMessages);
             return [...uniqueNewMessages, ...prevMessages];
           });
+
+          // Очищаем justSentMessageIds, так как сообщения через SSE были обработаны
+          setJustSentMessageIds(new Set());
         }
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
@@ -36,7 +41,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [justSentMessageIds]);
 
   useEffect(() => {
     if (!isUserScrolling) {
@@ -55,7 +60,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(), // Добавляем локальную временную метку
+      sendingTime: new Date().toLocaleTimeString(),
       pinned: false
     };
 
@@ -67,6 +72,9 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       return [tempMessage, ...prevMessages];
     });
 
+    // Добавляем id сообщения во временный список отправленных сообщений
+    setJustSentMessageIds((prevIds) => new Set(prevIds.add(tempMessage.id)));
+
     setComment('');
 
     try {
@@ -76,24 +84,16 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         body: JSON.stringify({ newMessages: [tempMessage] })
       });
 
-      if (response.ok) {
-        const serverResponse = await response.json();
-        console.log('Ответ сервера с сообщением:', serverResponse);
-        if (serverResponse && serverResponse.length > 0) {
-          setVisibleMessages((prevMessages) => {
-            console.log('Сообщения до добавления ответа от сервера:', prevMessages);
-            const newMessages = serverResponse.filter(
-              (msg) => !prevMessages.some((prevMsg) => prevMsg.id === msg.id)
-            );
-            console.log('Сообщения для добавления после ответа от сервера:', newMessages);
-            return [...newMessages, ...prevMessages];
-          });
-        }
-      } else {
+      if (!response.ok) {
         console.error('Ошибка при отправке сообщения');
         setVisibleMessages((prevMessages) => {
           console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
           return prevMessages.filter(msg => msg.id !== tempMessage.id);
+        });
+        setJustSentMessageIds((prevIds) => {
+          const newIds = new Set(prevIds);
+          newIds.delete(tempMessage.id);
+          return newIds;
         });
       }
     } catch (error) {
@@ -101,6 +101,11 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       setVisibleMessages((prevMessages) => {
         console.log('Удаление временного сообщения из состояния из-за ошибки:', tempMessage);
         return prevMessages.filter(msg => msg.id !== tempMessage.id);
+      });
+      setJustSentMessageIds((prevIds) => {
+        const newIds = new Set(prevIds);
+        newIds.delete(tempMessage.id);
+        return newIds;
       });
     }
   };
