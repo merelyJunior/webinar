@@ -2,17 +2,16 @@ import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
 import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
 
-
 const clients = []; // Массив для хранения подключенных клиентов
+
+// Функция для получения состояния потока из базы данных
 async function getStreamStatus(streamId) {
   const client = await pool.connect();
   try {
     const query = `
       SELECT is_scheduled, previous_start_time
-      FROM stream_status
-      WHERE stream_id = $1
-      ORDER BY id DESC
-      LIMIT 1
+      FROM streams
+      WHERE id = $1
     `;
     const { rows } = await client.query(query, [streamId]);
     return rows[0] || { is_scheduled: false, previous_start_time: null };
@@ -26,10 +25,9 @@ async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
   const client = await pool.connect();
   try {
     const query = `
-      INSERT INTO stream_status (stream_id, is_scheduled, previous_start_time)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (stream_id) 
-      DO UPDATE SET is_scheduled = $2, previous_start_time = $3
+      UPDATE streams
+      SET is_scheduled = $2, previous_start_time = $3
+      WHERE id = $1
     `;
     await client.query(query, [streamId, isScheduled, previousStartTime]);
   } finally {
@@ -71,7 +69,7 @@ export async function GET(req) {
       WHERE id = $1
     `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = JSON.parse(scenarioRows[0]?.scenario_text || '[]'); // Парсинг текста сценария в массив
+    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]'; // Парсинг текста сценария в массив
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
       throw new Error('Сценарий пуст или отсутствует');
@@ -142,6 +140,7 @@ export async function GET(req) {
     console.log('Соединение с базой данных закрыто');
   }
 }
+
 export async function POST(request) {
   try {
     const { newMessages = [], pinnedMessageId, unpin, sender } = await request.json();
@@ -190,9 +189,6 @@ async function broadcastMessages(messages, excludeSender) {
     });
   });
 }
-
-
-
 
 async function saveMessageToDb(message) {
   const client = await pool.connect();
