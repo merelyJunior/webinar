@@ -34,21 +34,6 @@ async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
     client.release();
   }
 }
-async function logExecution(streamId) {
-  const client = await pool.connect();
-  try {
-    const query = `
-      INSERT INTO execution_logs (stream_id)
-      VALUES ($1)
-    `;
-    await client.query(query, [streamId]);
-    console.log('Запись успешно добавлена в execution_logs');
-  } catch (error) {
-    console.error('Ошибка при добавлении записи в execution_logs:', error);
-  } finally {
-    client.release();
-  }
-}
 
 export async function GET(req) {
   const client = await pool.connect(); // Получаем клиента из пула
@@ -84,7 +69,7 @@ export async function GET(req) {
       WHERE id = $1
     `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = JSON.parse(scenarioRows[0]?.scenario_text || '[]'); // Парсинг текста сценария в массив
+    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]'; // Парсинг текста сценария в массив
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
       throw new Error('Сценарий пуст или отсутствует');
@@ -94,11 +79,26 @@ export async function GET(req) {
     if (!isScheduled) {
       isScheduled = true;
 
-      // Логируем выполнение
-      await logExecution(streamId);
+      // Планируем комментарии из базы данных
+      commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
+        const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
 
-      // Обновляем состояние
-      await updateStreamStatus(streamId, isScheduled, startTime);
+        schedule.scheduleJob(new Date(scheduleTime), async () => {
+          const message = {
+            id: Date.now(), // Генерация уникального ID на основе времени
+            sender,
+            text,
+            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            pinned: pinned || false
+          };
+
+          // Сохраняем сообщение в базе данных
+          await saveMessageToDb(message);
+          broadcastMessages(message, sender); // Обновляем всех клиентов
+        });
+      });
+
+      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
     }
 
     // Создание нового потока данных для отправки сообщений клиентам
