@@ -2,34 +2,66 @@ import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
 import pool from '/app/connection'; // Убедитесь, что путь к pool правильный
 
-let isScheduled = false;
-let previousStartTime = null;
 
 const clients = []; // Массив для хранения подключенных клиентов
+async function getStreamStatus(streamId) {
+  const client = await pool.connect();
+  try {
+    const query = `
+      SELECT is_scheduled, previous_start_time
+      FROM stream_status
+      WHERE stream_id = $1
+      ORDER BY id DESC
+      LIMIT 1
+    `;
+    const { rows } = await client.query(query, [streamId]);
+    return rows[0] || { is_scheduled: false, previous_start_time: null };
+  } finally {
+    client.release();
+  }
+}
+
+// Функция для обновления состояния потока в базе данных
+async function updateStreamStatus(streamId, isScheduled, previousStartTime) {
+  const client = await pool.connect();
+  try {
+    const query = `
+      INSERT INTO stream_status (stream_id, is_scheduled, previous_start_time)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (stream_id) 
+      DO UPDATE SET is_scheduled = $2, previous_start_time = $3
+    `;
+    await client.query(query, [streamId, isScheduled, previousStartTime]);
+  } finally {
+    client.release();
+  }
+}
 
 export async function GET(req) {
   const client = await pool.connect(); // Получаем клиента из пула
   try {
     // Получаем startTime и scenarioId из базы данных
     const queryStream = `
-      SELECT start_date, scenario_id
+      SELECT id, start_date, scenario_id
       FROM streams
       ORDER BY start_date DESC
       LIMIT 1
     `;
     const { rows: streamRows } = await client.query(queryStream);
-
-    const startTime = streamRows[0]?.start_date;
-    const scenarioId = streamRows[0]?.scenario_id;
     
-    if (!startTime || !scenarioId) {
+    if (streamRows.length === 0) {
       throw new Error('Не удалось найти время начала или ID сценария');
     }
+
+    const { id: streamId, start_date: startTime, scenario_id: scenarioId } = streamRows[0];
+    
+    // Получаем состояние потока
+    let { is_scheduled: isScheduled, previous_start_time: previousStartTime } = await getStreamStatus(streamId);
 
     // Сбрасываем isScheduled, если время начала изменилось
     if (previousStartTime !== startTime) {
       isScheduled = false;
-      previousStartTime = startTime; // Обновляем предыдущее время начала
+      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
     }
 
     // Получаем сценарий комментариев по scenarioId
@@ -39,7 +71,7 @@ export async function GET(req) {
       WHERE id = $1
     `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
+    const commentsSchedule = JSON.parse(scenarioRows[0]?.scenario_text || '[]'); // Парсинг текста сценария в массив
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
       throw new Error('Сценарий пуст или отсутствует');
@@ -67,6 +99,8 @@ export async function GET(req) {
           broadcastMessages(message, sender); // Обновляем всех клиентов
         });
       });
+
+      await updateStreamStatus(streamId, isScheduled, startTime); // Обновляем состояние
     }
 
     // Создание нового потока данных для отправки сообщений клиентам
