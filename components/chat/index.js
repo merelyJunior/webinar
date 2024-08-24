@@ -24,11 +24,11 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
             console.log('Предыдущие сообщения:', prevMessages);
             const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
             const uniqueNewMessages = messages.filter((msg) => {
-              const isNewMessage = !prevMessageIds.has(msg.id);
-              if (!isNewMessage) {
+              if (prevMessageIds.has(msg.id)) {
                 console.log(`Сообщение с id ${msg.id} уже существует и не будет добавлено.`);
+                return false;
               }
-              return isNewMessage;
+              return true;
             });
             console.log('Новые уникальные сообщения для добавления в состояние:', uniqueNewMessages);
             return [...uniqueNewMessages, ...prevMessages];
@@ -61,7 +61,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(), // Добавляем локальную временную метку
+      sendingTime: new Date().toLocaleTimeString(),
       pinned: false
     };
 
@@ -145,7 +145,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id, unpin: true }),  // Добавили флаг unpin
+        body: JSON.stringify({ pinnedMessageId: message.id, unpin: true }),
       });
     } catch (error) {
       console.error('Ошибка при откреплении сообщения:', error);
