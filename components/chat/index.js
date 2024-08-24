@@ -49,44 +49,38 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
-
+  
     const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(), // Добавляем локальную временную метку
+      sendingTime: new Date().toLocaleTimeString(),
       pinned: false
     };
-
+  
     console.log('Отправляем сообщение на сервер:', tempMessage);
-
-    // Убираем добавление временного сообщения в локальный state
+  
+    // Добавляем сообщение в visibleMessages немедленно
+    setVisibleMessages((prevMessages) => [tempMessage, ...prevMessages]);
+  
     setComment('');
-
+  
     try {
       const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newMessages: [tempMessage] })
       });
-
-      if (response.ok) {
-        const serverResponse = await response.json();
-        console.log('Ответ сервера с сообщением:', serverResponse);
-        if (serverResponse && serverResponse.length > 0) {
-          setVisibleMessages((prevMessages) => {
-            const newMessages = serverResponse.filter(
-              (msg) => !prevMessages.some((prevMsg) => prevMsg.id === msg.id)
-            );
-            console.log('Сообщения для добавления после ответа от сервера:', newMessages);
-            return [...newMessages, ...prevMessages];
-          });
-        }
-      } else {
+  
+      if (!response.ok) {
         console.error('Ошибка при отправке сообщения');
+        // В случае ошибки удаляем сообщение из visibleMessages
+        setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
+      // В случае ошибки удаляем сообщение из visibleMessages
+      setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
     }
   };
 
