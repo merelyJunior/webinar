@@ -12,13 +12,13 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   useEffect(() => {
     const eventSource = new EventSource('/api/messages');
-
+  
     eventSource.onmessage = (event) => {
       try {
         const { messages, clientsCount } = JSON.parse(event.data);
-
+  
         console.log('Получено сообщение через SSE:', messages);
-
+  
         setClientsCount(clientsCount);
         if (messages) {
           setVisibleMessages((prevMessages) => {
@@ -44,9 +44,10 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         console.error('Ошибка при обработке сообщений SSE:', error);
       }
     };
-
+  
     return () => {
       eventSource.close();
+      console.log('SSE-соединение закрыто');
     };
   }, []);
 
@@ -74,11 +75,10 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     console.log('Отправляем сообщение на сервер:', tempMessage);
 
     setVisibleMessages((prevMessages) => {
-      console.log('Добавляем временное сообщение в состояние:', tempMessage);
+  
       return [tempMessage, ...prevMessages];
     });
-
-    // Добавляем ID сообщения в ref, чтобы игнорировать его при получении через SSE
+// Добавляем ID сообщения в ref, чтобы игнорировать его при получении через SSE
     sentMessageIds.current.add(tempMessage.id);
 
     setComment('');
