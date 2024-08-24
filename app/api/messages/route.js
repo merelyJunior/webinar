@@ -84,7 +84,7 @@ export async function GET(req) {
       WHERE id = $1
     `;
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = JSON.parse(scenarioRows[0]?.scenario_text || '[]'); // Парсинг текста сценария в массив
+    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]'; // Парсинг текста сценария в массив
 
     if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
       throw new Error('Сценарий пуст или отсутствует');
