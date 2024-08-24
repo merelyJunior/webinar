@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
 import pool from '/app/connection'; 
-import moment from 'moment-timezone';
 
 let isScheduled = false;
 let previousStartTime = null;
@@ -22,6 +21,7 @@ export async function GET(req) {
 
     const startTime = streamRows[0]?.start_date; // Время из базы данных
     const scenarioId = streamRows[0]?.scenario_id;
+    console.log(startTime);
     
     if (!startTime || !scenarioId) {
       throw new Error('Не удалось найти время начала или ID сценария');
@@ -54,22 +54,26 @@ export async function GET(req) {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
     
         // Логируем текущее время сервера и время начала отправки
-        const currentTime = new Date();
-        console.log(`Текущее время сервера: ${currentTime.toLocaleString()}`);
-        console.log(`Отправка сообщения начнется в: ${new Date(scheduleTime).toLocaleString()}`);
+        // const currentTime = new Date();
+        // console.log(`Текущее время сервера: ${currentTime.toLocaleString()}`);
+        // console.log(`Отправка сообщения начнется в: ${new Date(scheduleTime).toLocaleString()}`);
     
         schedule.scheduleJob(new Date(scheduleTime), async () => {
+          console.log(`Отправка сообщения: "${text}" началась в ${new Date().toLocaleString()}`);
+          
           const message = {
-            id: Date.now(), // Генерация уникального ID на основе времени
+            id: Date.now(),
             sender,
             text,
-            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
+            sendingTime: new Date().toLocaleTimeString(),
             pinned: pinned || false
           };
-    
-          // Сохраняем сообщение в базе данных
+        
+          console.log('Сохранение сообщения в базу данных');
           await saveMessageToDb(message);
-          broadcastMessages(); // Обновляем всех клиентов
+        
+          console.log('Обновление всех клиентов');
+          broadcastMessages([message]);
         });
       });
     }
@@ -115,13 +119,13 @@ export async function GET(req) {
   }
 }
 export async function POST(request) {
+  console.log('Получен POST-запрос для отправки сообщения');
+  
   try {
-
     const body = await request.json();
 
     const { newMessages = [], pinnedMessageId, unpin, sender } = body;
 
-    // Проверка корректности данных
     if (!Array.isArray(newMessages) || newMessages.length !== 1) {
       console.error('newMessages должен быть массивом с одним элементом');
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
@@ -129,12 +133,15 @@ export async function POST(request) {
 
     let message = newMessages[0];
     message.sendingTime = new Date().toLocaleTimeString();
+
+    console.log('Сохранение сообщения в базу данных');
     await saveMessageToDb(message);
 
+    console.log('Обновление всех клиентов');
     broadcastMessages([message], sender);
-    console.log('Сообщение отправлено клиентам');
 
-    // Обновление закрепленных сообщений
+    console.log('Сообщение отправлено клиентам');
+    
     if (pinnedMessageId !== undefined) {
       console.log(`Обновление статуса закрепленного сообщения: ${pinnedMessageId}, unpin: ${unpin}`);
       await updatePinnedStatus(pinnedMessageId, !unpin);
