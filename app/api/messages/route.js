@@ -52,7 +52,8 @@ export async function GET(req) {
       // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
-
+        console.log(startTime);
+        
         schedule.scheduleJob(new Date(scheduleTime), async () => {
           const message = {
             id: Date.now(), // Генерация уникального ID на основе времени
