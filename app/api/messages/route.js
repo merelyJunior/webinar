@@ -120,6 +120,9 @@ export async function POST(request) {
 
     // Обработка новых сообщений
     for (const message of newMessages) {
+      // Добавляем время создания на сервере
+      message.sendingTime = new Date().toLocaleTimeString();
+
       // Отправляем сообщение клиентам
       broadcastMessages([message], sender);
 

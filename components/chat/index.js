@@ -43,11 +43,12 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const handleMessageSend = async () => {
     if (comment.trim() === '') return;
 
+    setComment('');
     const message = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(),
+      sendingTime: null,
       pinned: false
     };
 
@@ -74,7 +75,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       setVisibleMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== message.id));
     }
     
-    setComment('');
   };
 
   const handleScroll = () => {
