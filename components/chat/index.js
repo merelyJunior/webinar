@@ -5,7 +5,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const sentMessageIds = useRef(new Set()); // Хранит ID отправленных сообщений
 
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -15,24 +14,22 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
   
     eventSource.onmessage = (event) => {
       try {
-        const { messages, clientsCount } = JSON.parse(event.data);
-  
-        setClientsCount(clientsCount);
-        if (messages) {
-          setVisibleMessages((prevMessages) => {
-            const prevMessageIds = new Set(prevMessages.map((msg) => msg.id));
-            const uniqueNewMessages = messages.filter((msg) => {
-              if (prevMessageIds.has(msg.id)) {
-                return false;
-              }
-              if (sentMessageIds.current.has(msg.id)) {
-                sentMessageIds.current.delete(msg.id); // Удаляем из временного списка отправленных сообщений
-                return false;
-              }
-              return true;
-            });
-            return [...uniqueNewMessages, ...prevMessages];
-          });
+        const data = JSON.parse(event.data);
+        
+        if (data.messageId !== undefined && data.pinned !== undefined) {
+          // Если пришло обновление статуса pinned
+          setVisibleMessages((prevMessages) =>
+            prevMessages.map((msg) =>
+              msg.id === data.messageId ? { ...msg, pinned: data.pinned } : msg
+            )
+          );
+        } else if (data.messages && data.messages.length > 0) {
+          // Если пришли новые сообщения
+          setVisibleMessages((prevMessages) => [
+            ...prevMessages,
+            ...data.messages
+          ]);
+          setClientsCount(data.clientsCount);
         }
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
@@ -65,14 +62,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       pinned: false
     };
 
-
-    setVisibleMessages((prevMessages) => {
-  
-      return [tempMessage, ...prevMessages];
-    });
-// Добавляем ID сообщения в ref, чтобы игнорировать его при получении через SSE
-    sentMessageIds.current.add(tempMessage.id);
-
     setComment('');
 
     try {
@@ -87,15 +76,10 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
         console.log('Ответ сервера с сообщением:', serverResponse);
       } else {
         console.error('Ошибка при отправке сообщения');
-        // Удаление временного сообщения в случае ошибки
-        setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
-        sentMessageIds.current.delete(tempMessage.id); // Удаляем ID из ref, т.к. сообщение не отправлено успешно
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-      // Удаление временного сообщения в случае ошибки
-      setVisibleMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempMessage.id));
-      sentMessageIds.current.delete(tempMessage.id); // Удаляем ID из ref, т.к. сообщение не отправлено успешно
+     
     }
   };
 
@@ -111,29 +95,29 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       msg.id === message.id ? { ...msg, pinned: true } : msg
     );
     setVisibleMessages(updatedMessages);
-
+  
     try {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id }),
+        body: JSON.stringify({ pinnedMessageId: message.id,  pinned: true }),
       });
     } catch (error) {
       console.error('Ошибка при закреплении сообщения:', error);
     }
   };
-
+  
   const handleUnpinMessage = async (message) => {
     const updatedMessages = visibleMessages.map((msg) =>
       msg.id === message.id ? { ...msg, pinned: false } : msg
     );
     setVisibleMessages(updatedMessages);
-
+  
     try {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id, unpin: true }),  // Добавили флаг unpin
+        body: JSON.stringify({ pinnedMessageId: message.id, pinned: false }),
       });
     } catch (error) {
       console.error('Ошибка при откреплении сообщения:', error);
@@ -157,18 +141,18 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
                 {isAdmin && (
                   !mess.pinned ? (
                     <button className={styles['pin-btn']} onClick={() => handlePinMessage(mess)}>
-                      Закрепить
+                     
                     </button>
                   ) : (
                     <button className={styles['unpin-btn']} onClick={() => handleUnpinMessage(mess)}>
-                      Открепить
+                  
                     </button>
                   )
                 )}
                 <p className={styles['message-text']}>{mess.text}</p>
               </div>
             </div>
-          )).reverse()
+          ))
         ) : (
           <p>Нет сообщений</p>
         )}

@@ -49,32 +49,33 @@ export async function GET(req) {
     // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
       isScheduled = true;
-      // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
     
-        // Логируем текущее время сервера и время начала отправки
-        // const currentTime = new Date();
-        // console.log(`Текущее время сервера: ${currentTime.toLocaleString()}`);
-        // console.log(`Отправка сообщения начнется в: ${new Date(scheduleTime).toLocaleString()}`);
-    
-        schedule.scheduleJob(new Date(scheduleTime), async () => {
-          console.log(`Отправка сообщения: "${text}" началась в ${new Date().toLocaleString()}`);
-          
-          const message = {
-            id: Date.now(),
-            sender,
-            text,
-            sendingTime: new Date().toLocaleTimeString(),
-            pinned: pinned || false
-          };
+        console.log(`Запланированная отправка сообщения "${text}" начнется в ${new Date(scheduleTime).toLocaleString()}`);
         
-          console.log('Сохранение сообщения в базу данных');
-          await saveMessageToDb(message);
-        
-          console.log('Обновление всех клиентов');
-          broadcastMessages([message]);
-        });
+        if (!schedule.scheduledJobs[`${text}-${scheduleTime}`]) { // Unique identifier for each job
+          schedule.scheduleJob(`${text}-${scheduleTime}`, new Date(scheduleTime), async () => {
+            try {
+              console.log(`Отправка сообщения: "${text}" началась в ${new Date().toLocaleString()}`);
+              
+              const message = {
+                id: Date.now(),
+                sender,
+                text,
+                sendingTime: new Date().toLocaleTimeString(),
+                pinned: pinned || false
+              };
+              
+              await saveMessageToDb(message);
+              broadcastMessages([message]);
+            } catch (error) {
+              console.error('Ошибка во время выполнения запланированного задания:', error);
+            }
+          });
+        } else {
+          console.log(`Задание для сообщения "${text}" уже существует, пропуск...`);
+        }
       });
     }
 
@@ -119,34 +120,23 @@ export async function GET(req) {
   }
 }
 export async function POST(request) {
-  console.log('Получен POST-запрос для отправки сообщения');
   
   try {
     const body = await request.json();
-
-    const { newMessages = [], pinnedMessageId, unpin, sender } = body;
-
-    if (!Array.isArray(newMessages) || newMessages.length !== 1) {
-      console.error('newMessages должен быть массивом с одним элементом');
-      return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
-    }
-
-    let message = newMessages[0];
-    message.sendingTime = new Date().toLocaleTimeString();
-
-    console.log('Сохранение сообщения в базу данных');
-    await saveMessageToDb(message);
-
-    console.log('Обновление всех клиентов');
-    broadcastMessages([message], sender);
-
-    console.log('Сообщение отправлено клиентам');
-    
+    const { newMessages = [], pinnedMessageId, pinned, sender } = body;
     if (pinnedMessageId !== undefined) {
-      console.log(`Обновление статуса закрепленного сообщения: ${pinnedMessageId}, unpin: ${unpin}`);
-      await updatePinnedStatus(pinnedMessageId, !unpin);
-      console.log('Статус закрепленного сообщения обновлен');
+      await updatePinnedStatus(pinnedMessageId, pinned);
+    }else{
+      let message = newMessages[0];
+      message.sendingTime = new Date().toLocaleTimeString();
+
+      await saveMessageToDb(message);
+
+      broadcastMessages([message], sender);
+
+      console.log('Сообщение отправлено клиентам');
     }
+    
 
     return NextResponse.json({ message: 'Сообщение обновлено' });
   } catch (error) {
@@ -154,19 +144,30 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Ошибка сервера' }, { status: 500 });
   }
 }
-
-async function broadcastMessages(newMessages = [], excludeSender) {
+async function updatePinnedStatus(messageId, pinned) {
+  const client = await pool.connect();
   try {
+    const updateQuery = 'UPDATE messages SET pinned = $1 WHERE id = $2';
+    await client.query(updateQuery, [pinned, messageId]);
+    await updateAndBroadcastPinnedStatus(messageId, pinned);
+  } catch (error) {
+    console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
+  } finally {
+    client.release();
+  }
+}
+async function updateAndBroadcastPinnedStatus(messageId, pinned) {
+  try {
+    // Формируем данные для отправки клиентам
     const messagePayload = {
-      messages: excludeSender
-        ? newMessages.filter(msg => msg.sender !== excludeSender)
-        : newMessages,
-      clientsCount: clients.length
+      messageId,
+      pinned
     };
+
     const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
 
-  
-    clients.forEach((client, index) => {
+    // Передаем данные всем подключенным клиентам
+    clients.forEach((client) => {
       client.write(messageData).catch(err => {
         const clientIndex = clients.indexOf(client);
         if (clientIndex !== -1) {
@@ -176,10 +177,36 @@ async function broadcastMessages(newMessages = [], excludeSender) {
       });
     });
 
-    // Логируем успешную отправку
+    console.log('Сообщение успешно отправлено всем клиентам');
+  } catch (error) {
+    console.error('Ошибка при обновлении и трансляции статуса закрепленного сообщения:', error);
+  }
+}
+async function broadcastMessages(newMessages = [], excludeSender) {
+  try {
+    const messagePayload = {
+      messages: excludeSender
+        ? newMessages.filter(msg => msg.sender !== excludeSender)
+        : newMessages.map(msg => ({
+            ...msg,
+            id: msg.id.toString() // Преобразуем BigInt в строку
+          })),
+      clientsCount: clients.length
+    };
+    const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
+
+    clients.forEach((client) => {
+      client.write(messageData).catch(err => {
+        const clientIndex = clients.indexOf(client);
+        if (clientIndex !== -1) {
+          clients.splice(clientIndex, 1);
+          console.log('Клиент удален из списка из-за ошибки отправки');
+        }
+      });
+    });
+
     console.log('Сообщения успешно отправлены всем клиентам');
   } catch (error) {
-    // Логируем любую ошибку, которая могла возникнуть в процессе
     console.error('Ошибка в процессе трансляции сообщений:', error);
   }
 }
@@ -223,14 +250,3 @@ async function loadMessagesFromDb() {
   }
 }
 
-async function updatePinnedStatus(messageId, pinned) {
-  const client = await pool.connect();
-  try {
-    const updateQuery = 'UPDATE messages SET pinned = $1 WHERE id = $2';
-    await client.query(updateQuery, [pinned, messageId]);
-  } catch (error) {
-    console.error('Ошибка при обновлении статуса закрепленного сообщения:', error);
-  } finally {
-    client.release();
-  }
-}

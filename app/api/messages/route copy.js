@@ -19,14 +19,15 @@ export async function GET(req) {
     `;
     const { rows: streamRows } = await client.query(queryStream);
 
-    const startTime = streamRows[0]?.start_date;
+    const startTime = streamRows[0]?.start_date; // Время из базы данных
     const scenarioId = streamRows[0]?.scenario_id;
+    console.log(startTime);
     
     if (!startTime || !scenarioId) {
       throw new Error('Не удалось найти время начала или ID сценария');
     }
 
-    // Сбрасываем isScheduled, если время начала изменилось
+    // Проверяем, нужно ли планировать задачи
     if (previousStartTime !== startTime) {
       isScheduled = false;
       previousStartTime = startTime; // Обновляем предыдущее время начала
@@ -41,31 +42,40 @@ export async function GET(req) {
     const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
     const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
 
-    if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
-      throw new Error('Сценарий пуст или отсутствует');
-    }
+    // if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
+    //   throw new Error('Сценарий пуст или отсутствует');
+    // }
 
     // Проверяем, было ли уже запланировано выполнение комментариев
     if (!isScheduled) {
       isScheduled = true;
-
-      // Планируем комментарии из базы данных
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
-
-        schedule.scheduleJob(new Date(scheduleTime), async () => {
-          const message = {
-            id: Date.now(), // Генерация уникального ID на основе времени
-            sender,
-            text,
-            sendingTime: new Date().toLocaleTimeString(), // Генерация времени отправки
-            pinned: pinned || false
-          };
-
-          // Сохраняем сообщение в базе данных
-          await saveMessageToDb(message);
-          broadcastMessages(); // Обновляем всех клиентов
-        });
+    
+        console.log(`Запланированная отправка сообщения "${text}" начнется в ${new Date(scheduleTime).toLocaleString()}`);
+        
+        if (!schedule.scheduledJobs[`${text}-${scheduleTime}`]) { // Unique identifier for each job
+          schedule.scheduleJob(`${text}-${scheduleTime}`, new Date(scheduleTime), async () => {
+            try {
+              console.log(`Отправка сообщения: "${text}" началась в ${new Date().toLocaleString()}`);
+              
+              const message = {
+                id: Date.now(),
+                sender,
+                text,
+                sendingTime: new Date().toLocaleTimeString(),
+                pinned: pinned || false
+              };
+              
+              await saveMessageToDb(message);
+              broadcastMessages([message]);
+            } catch (error) {
+              console.error('Ошибка во время выполнения запланированного задания:', error);
+            }
+          });
+        } else {
+          console.log(`Задание для сообщения "${text}" уже существует, пропуск...`);
+        }
       });
     }
 
@@ -110,13 +120,13 @@ export async function GET(req) {
   }
 }
 export async function POST(request) {
+  console.log('Получен POST-запрос для отправки сообщения');
+  
   try {
-
     const body = await request.json();
 
     const { newMessages = [], pinnedMessageId, unpin, sender } = body;
 
-    // Проверка корректности данных
     if (!Array.isArray(newMessages) || newMessages.length !== 1) {
       console.error('newMessages должен быть массивом с одним элементом');
       return NextResponse.json({ message: 'Неверные данные' }, { status: 400 });
@@ -124,12 +134,15 @@ export async function POST(request) {
 
     let message = newMessages[0];
     message.sendingTime = new Date().toLocaleTimeString();
+
+    console.log('Сохранение сообщения в базу данных');
     await saveMessageToDb(message);
 
+    console.log('Обновление всех клиентов');
     broadcastMessages([message], sender);
-    console.log('Сообщение отправлено клиентам');
 
-    // Обновление закрепленных сообщений
+    console.log('Сообщение отправлено клиентам');
+    
     if (pinnedMessageId !== undefined) {
       console.log(`Обновление статуса закрепленного сообщения: ${pinnedMessageId}, unpin: ${unpin}`);
       await updatePinnedStatus(pinnedMessageId, !unpin);
@@ -145,26 +158,19 @@ export async function POST(request) {
 
 async function broadcastMessages(newMessages = [], excludeSender) {
   try {
-    // Логируем получение новых сообщений
-    console.log('Получены новые сообщения для трансляции:', newMessages);
-
-    // Формируем payload для отправки клиентам
     const messagePayload = {
       messages: excludeSender
         ? newMessages.filter(msg => msg.sender !== excludeSender)
-        : newMessages,
+        : newMessages.map(msg => ({
+            ...msg,
+            id: msg.id.toString() // Преобразуем BigInt в строку
+          })),
       clientsCount: clients.length
     };
     const messageData = `data: ${JSON.stringify(messagePayload)}\n\n`;
-
-    // Логируем сформированные данные для отправки клиентам
-    console.log('Отправляем сообщение следующим клиентам:');
+  
     clients.forEach((client, index) => {
-      console.log(`Клиент ${index + 1}:`);
-      console.log('Сообщение:', messageData);
       client.write(messageData).catch(err => {
-        console.error('Ошибка при отправке сообщения клиенту:', err);
-        // Удаляем клиента из списка, если произошла ошибка при отправке
         const clientIndex = clients.indexOf(client);
         if (clientIndex !== -1) {
           clients.splice(clientIndex, 1);
@@ -173,10 +179,8 @@ async function broadcastMessages(newMessages = [], excludeSender) {
       });
     });
 
-    // Логируем успешную отправку
     console.log('Сообщения успешно отправлены всем клиентам');
   } catch (error) {
-    // Логируем любую ошибку, которая могла возникнуть в процессе
     console.error('Ошибка в процессе трансляции сообщений:', error);
   }
 }
