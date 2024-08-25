@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import schedule from 'node-schedule';
 import pool from '/app/connection'; 
-
 let isScheduled = false;
 let previousStartTime = null;
+let isVideoFinished = false;
 
 const clients = []; 
 
 export async function GET(req) {
-  const client = await pool.connect(); // Получаем клиента из пула
+  const client = await pool.connect();
   try {
-    // Получаем startTime и scenarioId из базы данных
+    // Получаем startTime, scenarioId и video_duration из базы данных
     const queryStream = `
-      SELECT start_date, scenario_id
+      SELECT start_date, scenario_id, video_duration
       FROM streams
       ORDER BY start_date DESC
       LIMIT 1
@@ -21,8 +21,8 @@ export async function GET(req) {
 
     const startTime = streamRows[0]?.start_date; // Время из базы данных
     const scenarioId = streamRows[0]?.scenario_id;
-    console.log(startTime);
-    
+    const videoDuration = streamRows[0]?.video_duration * 1000; // Преобразуем продолжительность в миллисекунды
+
     if (!startTime || !scenarioId) {
       throw new Error('Не удалось найти время начала или ID сценария');
     }
@@ -30,35 +30,29 @@ export async function GET(req) {
     // Проверяем, нужно ли планировать задачи
     if (previousStartTime !== startTime) {
       isScheduled = false;
+      isVideoFinished = false;
       previousStartTime = startTime; // Обновляем предыдущее время начала
     }
 
-    // Получаем сценарий комментариев по scenarioId
-    const queryScenario = `
-      SELECT scenario_text
-      FROM scenario
-      WHERE id = $1
-    `;
-    const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
-    const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
-
-    // if (!Array.isArray(commentsSchedule) || !commentsSchedule.length) {
-    //   throw new Error('Сценарий пуст или отсутствует');
-    // }
-
-    // Проверяем, было ли уже запланировано выполнение комментариев
+    // Планирование комментариев
     if (!isScheduled) {
       isScheduled = true;
+
+      const queryScenario = `
+        SELECT scenario_text
+        FROM scenario
+        WHERE id = $1
+      `;
+      const { rows: scenarioRows } = await client.query(queryScenario, [scenarioId]);
+      const commentsSchedule = scenarioRows[0]?.scenario_text || '[]';
+
       commentsSchedule.forEach(({ showAt, text, sender, pinned }) => {
         const scheduleTime = new Date(startTime).getTime() + showAt * 1000;
-    
-        console.log(`Запланированная отправка сообщения "${text}" начнется в ${new Date(scheduleTime).toLocaleString()}`);
         
         if (!schedule.scheduledJobs[`${text}-${scheduleTime}`]) { // Unique identifier for each job
           schedule.scheduleJob(`${text}-${scheduleTime}`, new Date(scheduleTime), async () => {
+            const taskClient = await pool.connect(); // Новое подключение для запланированного задания
             try {
-              console.log(`Отправка сообщения: "${text}" началась в ${new Date().toLocaleString()}`);
-              
               const message = {
                 id: Date.now(),
                 sender,
@@ -67,16 +61,63 @@ export async function GET(req) {
                 pinned: pinned || false
               };
               
-              await saveMessageToDb(message);
+              await saveMessageToDb(message, taskClient);
               broadcastMessages([message]);
             } catch (error) {
               console.error('Ошибка во время выполнения запланированного задания:', error);
+            } finally {
+              taskClient.release(); // Освобождение подключения
             }
           });
         } else {
           console.log(`Задание для сообщения "${text}" уже существует, пропуск...`);
         }
       });
+
+      // Планирование обработки окончания видео
+      const videoEndTime = new Date(startTime).getTime() + videoDuration;
+      
+      if (!isVideoFinished) {
+        schedule.scheduleJob('saveAndClearMessages', new Date(videoEndTime), async () => {
+          const taskClient = await pool.connect(); // Новое подключение для запланированного задания
+          try {
+            console.log('Видео завершено. Сохраняем и очищаем сообщения.');
+
+            // Получаем все сообщения из таблицы messages
+            const messagesQuery = 'SELECT * FROM messages ORDER BY sending_time ASC';
+            const { rows: messages } = await taskClient.query(messagesQuery);
+
+            // Сохраняем сообщения в архивную таблицу как JSON массив
+            const saveQuery = `
+              INSERT INTO archived_messages (messages)
+              VALUES ($1)
+            `;
+            await taskClient.query(saveQuery, [JSON.stringify(messages)]);
+
+            console.log('Сообщения успешно сохранены в архив.');
+
+            // Установка таймера на удаление сообщений через час
+            schedule.scheduleJob('clearMessages', new Date(Date.now() + 3600000), async () => {
+              const deleteClient = await pool.connect(); // Новое подключение для удаления сообщений
+              try {
+                const deleteQuery = 'DELETE FROM messages';
+                await deleteClient.query(deleteQuery);
+                console.log('Таблица сообщений очищена.');
+              } catch (error) {
+                console.error('Ошибка при очистке таблицы сообщений:', error);
+              } finally {
+                deleteClient.release(); // Освобождение подключения после удаления
+              }
+            });
+
+          } catch (error) {
+            console.error('Ошибка при сохранении сообщений в архив:', error);
+          } finally {
+            taskClient.release(); // Освобождение подключения после сохранения
+            isVideoFinished = true;
+          }
+        });
+      }
     }
 
     // Создание нового потока данных для отправки сообщений клиентам
@@ -115,10 +156,11 @@ export async function GET(req) {
     console.error('Ошибка в API маршруте startStream:', error);
     return NextResponse.json({ error: 'Ошибка при запуске потока' }, { status: 500 });
   } finally {
-    client.release(); // Освобождаем клиента
+    client.release(); // Освобождаем клиента после выполнения основного кода
     console.log('Соединение с базой данных закрыто');
   }
 }
+
 export async function POST(request) {
   
   try {
@@ -128,7 +170,7 @@ export async function POST(request) {
       await updatePinnedStatus(pinnedMessageId, pinned);
     }else{
       let message = newMessages[0];
-      message.sendingTime = new Date().toISOString();
+      message.sending_time = new Date().toISOString();
 
       await saveMessageToDb(message);
 

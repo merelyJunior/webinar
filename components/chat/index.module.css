@@ -56,7 +56,8 @@
   }
   
   .message-text {
-    word-wrap: break-word;
+    white-space: normal; 
+    max-width: 80%; 
     overflow-wrap: break-word;
   }
   
