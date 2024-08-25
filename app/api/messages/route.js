@@ -63,7 +63,7 @@ export async function GET(req) {
                 id: Date.now(),
                 sender,
                 text,
-                sendingTime: new Date().toLocaleTimeString(),
+                sendingTime: new Date().toISOString(),
                 pinned: pinned || false
               };
               
@@ -128,7 +128,7 @@ export async function POST(request) {
       await updatePinnedStatus(pinnedMessageId, pinned);
     }else{
       let message = newMessages[0];
-      message.sendingTime = new Date().toLocaleTimeString();
+      message.sendingTime = new Date().toISOString();
 
       await saveMessageToDb(message);
 
@@ -238,9 +238,8 @@ async function saveMessageToDb(message) {
 async function loadMessagesFromDb() {
   const client = await pool.connect();
   try {
-    const query = 'SELECT * FROM messages ORDER BY sending_time DESC';
+    const query = 'SELECT * FROM messages ORDER BY sending_time ASC';
     const { rows } = await client.query(query);
-    
     return rows;
   } catch (error) {
     console.error('Ошибка при загрузке сообщений из базы данных:', error);

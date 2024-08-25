@@ -15,6 +15,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log(data.messages);
         
         if (data.messageId !== undefined && data.pinned !== undefined) {
           // Если пришло обновление статуса pinned
@@ -58,7 +59,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
       text: comment,
-      sendingTime: new Date().toLocaleTimeString(),
+      sendingTime: new Date().toISOString(),
       pinned: false
     };
 
@@ -135,7 +136,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
             >
               <div className={styles['message-data']}>
                 <p className={styles['sender-name']}>{mess.sender}</p>
-                <p className={styles['sending-time']}>{mess.sendingTime}</p>
+                <p className={styles['sending-time']}>{new Date(mess.sendingTime).toLocaleTimeString()}</p>
               </div>
               <div className={styles['pinned-controls']}>
                 {isAdmin && (
