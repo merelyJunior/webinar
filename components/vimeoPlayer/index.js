@@ -10,17 +10,29 @@ const VimeoPlayer = ({ startStream }) => {
   const [quality, setQuality] = useState('720p');
   const [showPopup, setShowPopup] = useState(false);
   const [streamStatus, setStreamStatus] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(null);
 
   const [timings, setTimings] = useState([]);
   const [message, setMessage] = useState('');
   const [dataFetched, setDataFetched] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setWindowWidth(window.innerWidth);
+
+      const handleResize = () => setWindowWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  useEffect(() => {
     if (playerRef.current && !player) {
       const newPlayer = new Player(playerRef.current, {
         id: startStream.video_id,
-        width: 855,
-        height: 480,
+        width: windowWidth > 720 ? 855 : windowWidth * 0.9, // Меняем ширину плеера в зависимости от ширины окна
+        height: windowWidth > 720 ? 480 : windowWidth * 0.9 * (480 / 855), // Высота меняется пропорционально
         controls: false,
         quality,
       });
@@ -51,7 +63,7 @@ const VimeoPlayer = ({ startStream }) => {
       });
     }
     setStreamStatus(startStream.streamStatus);
-  }, [player, startStream, quality, timings, streamStatus]);
+  }, [player, startStream, quality, timings, streamStatus, windowWidth]);
 
   useEffect(() => {
     if (startStream && startStream.scenario_id && !dataFetched) {
@@ -93,7 +105,6 @@ const VimeoPlayer = ({ startStream }) => {
     }
   };
   
-
   const renderStreamStatus = () => {
     switch (streamStatus) {
       case 'notStarted':
@@ -114,7 +125,7 @@ const VimeoPlayer = ({ startStream }) => {
                 <select id="quality" onChange={handleQualityChange} value={quality}>
                   <option value="1080p">1080p</option>
                   <option value="720p">720p</option>
-                  <option value="540p">480p</option>
+                  <option value="540p">540p</option>
                   <option value="360p">360p</option>
                   <option value="240p">240p</option>
                 </select>
