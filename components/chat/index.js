@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
 
-const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
+const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount}) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -15,20 +15,21 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-  
+        
         if (data.messageId !== undefined && data.pinned !== undefined) {
+          // Если пришло обновление статуса pinned
           setVisibleMessages((prevMessages) =>
             prevMessages.map((msg) =>
               msg.id === data.messageId ? { ...msg, pinned: data.pinned } : msg
             )
           );
         } else if (data.messages && data.messages.length > 0) {
+          // Если пришли новые сообщения
           setVisibleMessages((prevMessages) => [
-            ...data.messages, 
-            ...prevMessages
+            ...prevMessages,
+            ...data.messages
           ]);
           setClientsCount(data.clientsCount);
-          setMessagesCount(data.messages.length);
         }
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
@@ -78,6 +79,7 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
+     
     }
   };
 
@@ -98,7 +100,7 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id, pinned: true }),
+        body: JSON.stringify({ pinnedMessageId: message.id,  pinned: true }),
       });
     } catch (error) {
       console.error('Ошибка при закреплении сообщения:', error);
@@ -122,14 +124,20 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
     }
   };
   
+  useEffect(() => {
+    setMessagesCount((prevCount) => {
+      if (prevCount !== visibleMessages.length) {
+        return visibleMessages.length;
+      }
+      return prevCount;
+    });
+    console.log(visibleMessages);
+    
+  }, [visibleMessages]);
+
   return (
     <div className={styles['chat-wrapper']}>
-      <div 
-        className={styles['chat-inner']} 
-        ref={chatContainerRef} 
-        onScroll={handleScroll}
-        style={{ overflowY: 'auto', height: '100%' }}
-      >
+      <div className={styles['chat-inner']} ref={chatContainerRef} onScroll={handleScroll}  style={{ overflowY: 'auto', height: '100%' }}>
         {visibleMessages.length > 0 ? (
           visibleMessages.map((mess) => (
             <div
