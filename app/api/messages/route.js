@@ -57,7 +57,7 @@ export async function GET(req) {
                 id: Date.now(),
                 sender,
                 text,
-                sendingTime: new Date().toISOString(),
+                sending_time: new Date().toISOString(),
                 pinned: pinned || false
               };
               
