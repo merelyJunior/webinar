@@ -1,10 +1,10 @@
 .homePage{
-    /* width: 1440px;
-    height: 1051px;
-    border: 1px solid red; */
+    
     margin: 0 auto;
     padding-top: 28px;
     padding-bottom: 28px;
+    padding-right: 15px;
+    padding-left: 15px;
     background-image: url('/assets/img/bg.png');
     background-repeat: no-repeat;
     background-position: center;
@@ -53,4 +53,44 @@
   }
   .copyright{
     opacity: 0.41;
+  }
+  @media screen and (max-width: 968px) {
+    .container{
+      flex-direction: column;
+    }
+    .banner{
+      margin-bottom: 47px;
+    }
+    .comments-container{
+      margin-left: 0;
+      max-width: unset;
+    }
+    .chat-wrapper{
+      min-height: 685px;
+    }
+    .copyright{
+      margin-top: 28px;
+      margin-bottom: 26px;
+    }
+  }
+  @media screen and (max-width: 768px) {
+  }
+  @media screen and (max-width: 576px) {
+  .container{
+    padding-top: 31px;
+  }
+  .main-title{
+    font-size: 20px;
+  }
+  .banner{
+    margin-top: 10px;
+    margin-bottom: 7px;
+  }
+  .comments-title{
+    font-size: 15px;
+  }
+  .comments-title span{
+    display: inline;
+  }
+  
   }

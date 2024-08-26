@@ -43,3 +43,22 @@
     align-items: center;
     
 }
+@media screen and (max-width: 576px) {
+    .header{
+        display: block;
+    }
+    .nav-container{
+        display: flex;
+        justify-content: space-between;
+    }
+    .nav ul{
+        max-width: 100px;
+    }
+    .members-count{
+        max-width: 166px;
+        margin-top: 68px;
+    }
+    .nav li:first-child{
+        margin-right: 0px;
+    }
+}

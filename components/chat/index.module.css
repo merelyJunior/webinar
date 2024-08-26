@@ -14,6 +14,7 @@
     position: relative;
     max-height: 470px;
     overflow-y: auto;
+    overflow-x: hidden;
     margin-bottom: 25px;
   }
   
@@ -62,6 +63,7 @@
   }
   
   .textarea {
+    width: 100%;
     min-height: 105px;
     padding: 15px 13px;
     border-radius: 10px;

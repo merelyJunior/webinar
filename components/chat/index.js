@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
 
-const Chat = ({ isAdmin, setClientsCount, userName }) => {
+const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount }) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -15,21 +15,20 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+  
         if (data.messageId !== undefined && data.pinned !== undefined) {
-          // Если пришло обновление статуса pinned
           setVisibleMessages((prevMessages) =>
             prevMessages.map((msg) =>
               msg.id === data.messageId ? { ...msg, pinned: data.pinned } : msg
             )
           );
         } else if (data.messages && data.messages.length > 0) {
-          // Если пришли новые сообщения
           setVisibleMessages((prevMessages) => [
-            ...prevMessages,
-            ...data.messages
+            ...data.messages, 
+            ...prevMessages
           ]);
           setClientsCount(data.clientsCount);
+          setMessagesCount(data.messages.length);
         }
       } catch (error) {
         console.error('Ошибка при обработке сообщений SSE:', error);
@@ -43,7 +42,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
 
   useEffect(() => {
     if (!isUserScrolling) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [visibleMessages, isUserScrolling]);
 
@@ -57,7 +56,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
     const tempMessage = {
       id: Date.now(),
       sender: !isAdmin ? userName : 'Модератор',
-      text: comment,
+      text: comment.replace(/\n/g, '\\n'),
       sending_time: new Date().toISOString(),
       pinned: false
     };
@@ -79,7 +78,6 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       }
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error);
-     
     }
   };
 
@@ -100,7 +98,7 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinnedMessageId: message.id,  pinned: true }),
+        body: JSON.stringify({ pinnedMessageId: message.id, pinned: true }),
       });
     } catch (error) {
       console.error('Ошибка при закреплении сообщения:', error);
@@ -123,10 +121,15 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
       console.error('Ошибка при откреплении сообщения:', error);
     }
   };
-
+  
   return (
     <div className={styles['chat-wrapper']}>
-      <div className={styles['chat-inner']} ref={chatContainerRef} onScroll={handleScroll}>
+      <div 
+        className={styles['chat-inner']} 
+        ref={chatContainerRef} 
+        onScroll={handleScroll}
+        style={{ overflowY: 'auto', height: '100%' }}
+      >
         {visibleMessages.length > 0 ? (
           visibleMessages.map((mess) => (
             <div
@@ -149,7 +152,14 @@ const Chat = ({ isAdmin, setClientsCount, userName }) => {
                     </button>
                   )
                 )}
-                <p className={styles['message-text']}>{mess.text}</p>
+                <p className={styles['message-text']}>
+                  {mess.text.replace(/\\n/g, '\n').split('\n').map((line, index) => (
+                    <React.Fragment key={index}>
+                      {line}
+                      <br />
+                    </React.Fragment>
+                  ))}
+                </p>
               </div>
             </div>
           ))

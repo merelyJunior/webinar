@@ -8,6 +8,7 @@ import Link from 'next/link';
 import Cookies from 'js-cookie';
 import { decodeJwt } from 'jose';
 import axios from 'axios';
+import HeaderMobile from '../../components/header_mobile';
 
 const HomePage = () => {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -17,12 +18,16 @@ const HomePage = () => {
     streamStatus: '',
     countdown: null,
   });
+  const [userName, setUserName] = useState(null);
+  const [userOnline, setUserOnline] = useState(null);
+  const [counter, setCounter] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(0);
 
   const getStreamData = async () => {
     try {
       const response = await axios.get('/api/streams', { headers: { 'Cache-Control': 'no-cache' } });
       const newData = response.data;
-      const { start_date, video_duration, scenario_id, video_id} = newData;
+      const { start_date, video_duration, scenario_id, video_id } = newData;
       return { start_date, video_duration, scenario_id, video_id };
     } catch (error) {
       console.error('Error fetching stream data:', error);
@@ -33,26 +38,26 @@ const HomePage = () => {
   const initializeStream = async () => {
     try {
       const streamsData = await getStreamData();
-  
+
       if (!streamsData || !streamsData.start_date) {
         console.error('No streams data available');
         return;
       }
-  
+
       const { start_date, video_duration, scenario_id, video_id } = streamsData;
-      
+
       const startTime = new Date(start_date);
-      
+
       if (isNaN(startTime.getTime())) {
         console.error('Invalid start date');
         return;
       }
-  
+
       const now = new Date();
       const duration = video_duration || 0;
       const streamEndTime = new Date(startTime);
       streamEndTime.setSeconds(streamEndTime.getSeconds() + duration);
-      
+
       let streamStatus = '';
       if (now < startTime) {
         streamStatus = 'notStarted';
@@ -62,7 +67,7 @@ const HomePage = () => {
         streamStatus = 'inProgress';
       }
       const delayTime = Math.max((now - startTime) / 1000, 0);
-  
+
       setStartStream(prevState => ({
         ...prevState,
         delayTime,
@@ -71,12 +76,12 @@ const HomePage = () => {
         scenario_id,
         video_id
       }));
-  
+
       if (streamStatus === 'notStarted') {
         const interval = setInterval(() => {
           const now = new Date();
           const timeDifference = startTime - now;
-  
+
           if (timeDifference <= 0) {
             clearInterval(interval);
             setStartStream(prevState => ({
@@ -95,38 +100,46 @@ const HomePage = () => {
           }
         }, 1000);
       }
-  
+
     } catch (error) {
       console.error('Error initializing stream:', error);
     }
   };
-  
-  
 
-  const [userName, setUserName] = useState(null);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setWindowWidth(window.innerWidth);
+
+      const handleResize = () => setWindowWidth(window.innerWidth);
+      window.addEventListener('resize', handleResize);
+
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
   useEffect(() => {
     const token = Cookies.get('authToken');
-    
+
     if (token) {
       try {
         const decodedToken = decodeJwt(token);
         setUserName(decodedToken.name);
-        
+
         if (decodedToken.is_admin === 1) {
           setIsAdmin(true);
         }
       } catch (error) {
         console.error('Invalid token:', error);
-         handleLogout();
+        handleLogout();
       }
     } else {
       console.error('No token found');
-       handleLogout();
+      handleLogout();
     }
 
     initializeStream();
   }, []);
+
   const handleLogout = async () => {
     try {
       await fetch('/api/user_logout', {
@@ -138,15 +151,20 @@ const HomePage = () => {
       console.error('Logout failed:', error);
     }
   };
-  const [userOnline, setUserOnline] = useState(null);
+
   const handleClientsCount = (e) => {
     setUserOnline(e);
-  }
-  
+  };
+
   return (
     <section className={styles.homePage}>
       <div className={styles.inner}>
-        <Header isAdmin={isAdmin} userOnline={userOnline}/>
+        {windowWidth <= 525 ? (
+          <HeaderMobile isAdmin={isAdmin} userOnline={userOnline} />
+        ) : (
+          <Header isAdmin={isAdmin} userOnline={userOnline} />
+        )}
+
         <div className={styles.container}>
           <div className={styles['player-container']}>
             <h1 className={styles['main-title']}>
@@ -159,9 +177,9 @@ const HomePage = () => {
           </div>
           <div className={styles['comments-container']}>
             <h3 className={styles['comments-title']}>
-              КОММЕНТАРИИ
+              КОММЕНТАРИИ <span>({counter ? counter : 0})</span>
             </h3>
-            <Chat isAdmin={isAdmin} setClientsCount={handleClientsCount} userName={userName}/>
+            <Chat isAdmin={isAdmin} setClientsCount={handleClientsCount} userName={userName} setMessagesCount={setCounter} />
           </div>
         </div>
         <p className={styles.copyright}>
