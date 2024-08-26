@@ -36,7 +36,6 @@
   align-items: center;
   justify-content: center;
   border-radius: 15px;
-  margin-top: 28px;
   max-width: 855px;
   overflow: hidden;
   width: 100%;
@@ -63,19 +62,13 @@
   transform: translateX(0) translateY(0);
 }
 @media screen and (max-width: 576px) {
-  .container{
-   padding-top: 31px;
-  }
-  .main-title{
-   font-size: 20px;
-  }
+  
   .stream-not-started,
   .stream-end{
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 15px;
-    margin-top: 28px;
     max-width: 360px;
     overflow: hidden;
     width: 100%;

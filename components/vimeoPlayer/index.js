@@ -31,7 +31,7 @@ const VimeoPlayer = ({ startStream }) => {
     if (playerRef.current && !player) {
       const newPlayer = new Player(playerRef.current, {
         id: startStream.video_id,
-        width: windowWidth > 720 ? 855 : windowWidth * 0.9, // Меняем ширину плеера в зависимости от ширины окна
+        width: windowWidth > 720 ? 855 : windowWidth * 0.9 , // Меняем ширину плеера в зависимости от ширины окна
         height: windowWidth > 720 ? 480 : windowWidth * 0.9 * (480 / 855), // Высота меняется пропорционально
         controls: false,
         quality,
