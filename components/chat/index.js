@@ -4,11 +4,13 @@ import Cookies from 'js-cookie';
 import Swal from 'sweetalert2'
 import withReactContent from 'sweetalert2-react-content'
 import UserLogin from '/components/login_popup';
+import { decodeJwt } from 'jose';
 import 'animate.css';
 const MySwal = withReactContent(Swal)
 
 const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndSeconds}) => {
  
+  const [currentName, setCurrentName] = useState('');
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -63,7 +65,7 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndS
 
     const tempMessage = {
       id: Date.now(),
-      sender: !isAdmin ? userName : 'Модератор',
+      sender: !isAdmin ? userName || currentName : 'Модератор',
       text: comment.replace(/\n/g, '\\n'),
       sending_time: new Date().toISOString(),
       pinned: false
@@ -142,9 +144,7 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndS
   }, [visibleMessages]);
 
 
-
   const [chatState, setChatState] = useState(false);
-
   const handeChatUnblock = (e) => {
     setChatState(e);
   }
@@ -181,6 +181,10 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndS
   }
   useEffect(() => {
     const token = Cookies.get('authToken');
+    if (token) {
+    const decodedToken = decodeJwt(token);
+    setCurrentName(decodedToken.name);
+    }
     if (chatState || token) {
       setChatState(true);
     }

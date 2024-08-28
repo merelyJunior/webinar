@@ -44,10 +44,16 @@
 
 .error {
   color: #ff0000;
+  margin: 0 auto;
   margin-top: 10px;
+  font-size: 14px;
+  max-width: 250px;
 }
 
 .success {
   color: #00ff00;
+  margin: 0 auto;
   margin-top: 10px;
+  font-size: 14px;
+  max-width: 250px;
 }

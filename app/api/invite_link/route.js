@@ -15,7 +15,6 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Не указаны имя или телефон' }, { status: 400 });
     }
 
-    console.log('Соединение с базой данных установлено');
 
     const query = `
       SELECT * FROM users WHERE name = $1 AND phone = $2
@@ -38,24 +37,24 @@ export async function GET(req) {
       console.log('Новый пользователь создан:', user);
     }
 
-    console.log('Создание JWT токенов');
+    let tokenExpirationTime;
+
+    const now = Math.floor(Date.now() / 1000); // Текущее время в секундах
+
+    if (streamEndSeconds && streamEndSeconds > now) {
+      // Если стрим еще не завершен, добавляем 3600 секунд к времени окончания стрима
+      tokenExpirationTime = streamEndSeconds + 3600;
+    } else {
+      // Если стрим завершен или не передан, используем стандартные 3600 секунд
+      tokenExpirationTime = now + 3600;
+    }
     const accessToken = await new SignJWT({ id: user.id, name: user.name, is_admin: user.is_admin })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setExpirationTime('1h')
+      .setExpirationTime(tokenExpirationTime)
       .sign(new TextEncoder().encode(process.env.JWT_SECRET));
-
-    const refreshToken = await new SignJWT({ id: user.id })
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setExpirationTime('7d')
-      .sign(new TextEncoder().encode(process.env.JWT_SECRET));
-
-    console.log('JWT токены созданы:', { accessToken, refreshToken });
 
     const response = NextResponse.redirect(new URL('/stream', req.url));
     response.cookies.set('authToken', accessToken);
-    response.cookies.set('refreshToken', refreshToken);
-
-    console.log('Токены установлены в куки');
 
     return response;
   } catch (error) {
