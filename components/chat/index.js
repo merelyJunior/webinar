@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
+import Cookies from 'js-cookie';
+import Swal from 'sweetalert2'
+import withReactContent from 'sweetalert2-react-content'
+import UserLogin from '/components/login_popup';
+import 'animate.css';
+const MySwal = withReactContent(Swal)
 
-const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, setPopupState}) => {
+const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndSeconds}) => {
+ 
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -135,6 +142,52 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, setPopupSt
   }, [visibleMessages]);
 
 
+
+  const [chatState, setChatState] = useState(false);
+
+  const handeChatUnblock = (e) => {
+    setChatState(e);
+  }
+
+  const popupShow = () => {
+    MySwal.fire({
+      html: <UserLogin streamEndSeconds={streamEndSeconds} unblockedChat={handeChatUnblock}/>, 
+      showCloseButton: true, 
+      showConfirmButton: false, 
+      customClass: {
+        popup: 'my-swal-popup',
+      },
+      showClass: {
+        popup: `
+          animate__animated
+          animate__fadeInUp
+          animate__faster
+        `
+      },
+      hideClass: {
+        popup: `
+          animate__animated
+          animate__fadeOutDown
+          animate__faster
+        `
+      },
+      padding: '0px', 
+    }).then((result) => {
+      if (result.isConfirmed) {
+        console.log('Пользователь подтвердил действие');
+      }
+    });
+  
+  }
+  useEffect(() => {
+    const token = Cookies.get('authToken');
+    console.log(token);
+    if (chatState || token) {
+      setChatState(true);
+    }
+  }, [chatState]);
+ 
+  
   return (
     <div className={styles['chat-wrapper']}>
       <div className={styles['chat-inner']} ref={chatContainerRef} onScroll={handleScroll}  style={{ overflowY: 'auto', height: '100%' }}>
@@ -176,23 +229,24 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, setPopupSt
         )}
         <div ref={chatEndRef} />
       </div>
-      <form>
-        <div className={styles['form-input']}>
-          <textarea 
-            className={styles.textarea} 
-            placeholder='Ваш комментарий' 
-            value={comment} 
-            onChange={handleCommentChange}
-            disabled={!isAdmin}
-          ></textarea>
-        </div>
-        {!isAdmin && (
-          <a className={styles['chat-login-btn']} onClick={() => setPopupState(true)}>Войти в чат</a>
+      
+        <form>
+          <div className={styles['form-input']}>
+            <textarea 
+              className={styles.textarea} 
+              placeholder='Ваш комментарий' 
+              value={comment} 
+              onChange={handleCommentChange}
+              disabled={!chatState}
+            ></textarea>
+          </div>
+          <button disabled={!chatState} type='button' className={styles.btn} onClick={handleMessageSend}>
+            Отправить
+          </button>
+        </form>
+        {!chatState && (<a className={styles['chat-login-btn']} onClick={()=>popupShow()}>Авторизуйтесь что бы оставлять комментарии</a>
         )}
-        <button disabled={!isAdmin} type='button' className={styles.btn} onClick={handleMessageSend}>
-          Отправить
-        </button>
-      </form>
+       
     </div>
   );
 };

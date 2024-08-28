@@ -14,9 +14,7 @@ const Header = ({ isAdmin,userOnline }) => {
       await fetch('/api/user_logout', {
         method: 'POST',
       });
-
-      // Перенаправление на страницу входа
-      router.push('/');
+      window.location.reload();
     } catch (error) {
       console.error('Ошибка при выходе:', error);
     }
@@ -34,27 +32,27 @@ const Header = ({ isAdmin,userOnline }) => {
         </div>
       </div>
       <Image className={styles.logo} src='/assets/img/logo.png' alt='logo' width={57} height={17}/>
-      {isAdmin && (
+     
         <nav>
           <ul className={styles.nav}>
           
-              <li>
+              {/* <li>
                 <Link href='/config'>
                   <Image className={styles.icon} src='/assets/img/config.png' alt='icon' width={17} height={17}/>
                     Настройки
                   </Link>
-              </li> 
-            
+              </li>  */}
+             {isAdmin && (
             <li>
               <a href="#" onClick={handleLogout} className={styles.logoutButton}>
                 <Image className={styles.icon} src='/assets/img/exit.png' alt='icon' width={17} height={17}/>
                 Выход
               </a>
             </li>
-          
+           )}
           </ul>
         </nav>
-      )}
+     
     </header>
   );
 };

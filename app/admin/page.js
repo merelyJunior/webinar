@@ -22,7 +22,7 @@ const AdminLogin = () => {
       if (response.status === 200) {
         setSuccess('Успешно вошли на вебинар.');
         // Перенаправление на вебинар
-        window.location.href = '/stream';
+        window.location.href = '/';
       }
     } catch (err) {
       console.error('Ошибка при отправке данных:', err);

@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   const client = await pool.connect(); // Получаем клиента из пула
   try {
-    const { name, phone, password, is_admin } = await req.json();
+    const { name, phone, password, is_admin, streamEndSeconds } = await req.json();
 
     // Проверяем, существует ли запись с данным именем и телефоном
     const { rows: existingUser } = await client.query(
@@ -26,22 +26,28 @@ export async function POST(req) {
       user = result.rows[0];
     }
 
+    let tokenExpirationTime;
+
+    const now = Math.floor(Date.now() / 1000); // Текущее время в секундах
+
+    if (streamEndSeconds && streamEndSeconds > now) {
+      // Если стрим еще не завершен, добавляем 3600 секунд к времени окончания стрима
+      tokenExpirationTime = streamEndSeconds + 3600;
+    } else {
+      // Если стрим завершен или не передан, используем стандартные 3600 секунд
+      tokenExpirationTime = now + 3600;
+    }
+
     // Создание JWT токена доступа
     const accessToken = await new SignJWT({ id: user.id, name: user.name, is_admin: user.is_admin })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setExpirationTime('1h')
+      .setExpirationTime(tokenExpirationTime) // Устанавливаем рассчитанное время истечения токена
       .sign(new TextEncoder().encode(process.env.JWT_SECRET));
 
-    // Создание JWT токена обновления
-    const refreshToken = await new SignJWT({ id: user.id })
-      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-      .setExpirationTime('7d')
-      .sign(new TextEncoder().encode(process.env.JWT_SECRET));
-
-    // Установка токенов в куки
+    // Установка токена в куки
     const response = NextResponse.json({ message: 'Успешно вошли' });
     response.cookies.set('authToken', accessToken);
-    response.cookies.set('refreshToken', refreshToken);
+
     return response;
   } catch (error) {
     console.error('Ошибка при обработке данных:', error);

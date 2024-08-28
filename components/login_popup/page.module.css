@@ -3,17 +3,12 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background-color: #181a40;
+  overflow: hidden;
 }
 
 .form {
   text-align: center;
-  background-color: #101239;
   color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgb(245 245 245 / 4%);
 }
 
 .form label {

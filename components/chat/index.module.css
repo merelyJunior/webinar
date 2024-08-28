@@ -132,5 +132,9 @@
     background-size: contain;
     background-repeat: no-repeat;
   }
-  
-  
+.chat-login-btn{
+  margin-top: 10px;
+  font-size: 12px;
+  text-decoration: underline !important;
+  cursor: pointer;
+}
