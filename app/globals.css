@@ -71,3 +71,7 @@ select {
   line-height: inherit;
   color: inherit;
 }
+textarea:disabled,
+button:disabled {
+  opacity: 0.5;
+}

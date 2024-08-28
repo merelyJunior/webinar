@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './index.module.css';
 
-const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount}) => {
+const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, setPopupState}) => {
   const [comment, setComment] = useState('');
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -131,9 +131,9 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount}) => {
       }
       return prevCount;
     });
-    console.log(visibleMessages);
     
   }, [visibleMessages]);
+
 
   return (
     <div className={styles['chat-wrapper']}>
@@ -183,9 +183,13 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount}) => {
             placeholder='Ваш комментарий' 
             value={comment} 
             onChange={handleCommentChange}
+            disabled={!isAdmin}
           ></textarea>
         </div>
-        <button type='button' className={styles.btn} onClick={handleMessageSend}>
+        {!isAdmin && (
+          <a className={styles['chat-login-btn']} onClick={() => setPopupState(true)}>Войти в чат</a>
+        )}
+        <button disabled={!isAdmin} type='button' className={styles.btn} onClick={handleMessageSend}>
           Отправить
         </button>
       </form>

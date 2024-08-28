@@ -34,24 +34,27 @@ const Header = ({ isAdmin,userOnline }) => {
         </div>
       </div>
       <Image className={styles.logo} src='/assets/img/logo.png' alt='logo' width={57} height={17}/>
-      <nav>
-        <ul className={styles.nav}>
-          {isAdmin && (
+      {isAdmin && (
+        <nav>
+          <ul className={styles.nav}>
+          
+              <li>
+                <Link href='/config'>
+                  <Image className={styles.icon} src='/assets/img/config.png' alt='icon' width={17} height={17}/>
+                    Настройки
+                  </Link>
+              </li> 
+            
             <li>
-              <Link href='/config'>
-                <Image className={styles.icon} src='/assets/img/config.png' alt='icon' width={17} height={17}/>
-                Настройки
-              </Link>
+              <a href="#" onClick={handleLogout} className={styles.logoutButton}>
+                <Image className={styles.icon} src='/assets/img/exit.png' alt='icon' width={17} height={17}/>
+                Выход
+              </a>
             </li>
-          )}
-          <li>
-            <a href="#" onClick={handleLogout} className={styles.logoutButton}>
-              <Image className={styles.icon} src='/assets/img/exit.png' alt='icon' width={17} height={17}/>
-              Выход
-            </a>
-          </li>
-        </ul>
-      </nav>
+          
+          </ul>
+        </nav>
+      )}
     </header>
   );
 };

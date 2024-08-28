@@ -29,19 +29,20 @@ const HeaderMobile = ({ isAdmin,userOnline }) => {
       <nav>
         <ul className={styles.nav}>
           {isAdmin && (
-            <li>
-              <Link href='/config'>
-                <Image className={styles.icon} src='/assets/img/config.png' alt='icon' width={17} height={17}/>
-                Настройки
-              </Link>
-            </li>
-          )}
+            // <li>
+            //   <Link href='/config'>
+            //     <Image className={styles.icon} src='/assets/img/config.png' alt='icon' width={17} height={17}/>
+            //     Настройки
+            //   </Link>
+            // </li>
+          
           <li>
             <a href="#" onClick={handleLogout} className={styles.logoutButton}>
               <Image className={styles.icon} src='/assets/img/exit.png' alt='icon' width={17} height={17}/>
               Выход
             </a>
           </li>
+          )}
         </ul>
       </nav>
     </div>
