@@ -80,7 +80,7 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndS
 
       if (response.ok) {
         const serverResponse = await response.json();
-        console.log('Ответ сервера с сообщением:', serverResponse);
+        // console.log('Ответ сервера с сообщением:', serverResponse);
       } else {
         console.error('Ошибка при отправке сообщения');
       }
@@ -181,7 +181,6 @@ const Chat = ({ isAdmin, setClientsCount, userName, setMessagesCount, streamEndS
   }
   useEffect(() => {
     const token = Cookies.get('authToken');
-    console.log(token);
     if (chatState || token) {
       setChatState(true);
     }

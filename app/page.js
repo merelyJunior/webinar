@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import VimeoPlayer from '/components/vimeoPlayer';
 import Header from '/components/header';
 import Chat from '/components/chat';
-import UserLogin from '/components/login_popup';
 import styles from './index.module.css';
 import Link from 'next/link';
 import Cookies from 'js-cookie';
@@ -131,22 +130,30 @@ const HomePage = () => {
 
   useEffect(() => {
     const token = Cookies.get('authToken');
-    
+
     if (token) {
       try {
         const decodedToken = decodeJwt(token);
-        setUserName(decodedToken.name);
-
-        if (decodedToken.is_admin === 1) {
-          setIsAdmin(true);
+        const currentTime = Date.now() / 1000;
+        if (decodedToken.exp < currentTime) {
+          Cookies.remove('authToken');
+          window.location.href = '/';
+        } else {
+          if (decodedToken.is_admin === 1) {
+            setIsAdmin(true);
+          }else{
+            setUserName(decodedToken.name)
+          }
         }
       } catch (error) {
-        console.error('Invalid token:', error);
+        console.error('Ошибка при декодировании токена:', error);
         handleLogout();
+        window.location.href = '/';
       }
     }
     initializeStream();
   }, []);
+ 
 
   const handleLogout = async () => {
     try {
@@ -163,7 +170,6 @@ const HomePage = () => {
   const handleClientsCount = (e) => {
     setUserOnline(e);
   };
-  console.log(isAdmin);
   
   return (
     <section className={styles.homePage}>

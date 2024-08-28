@@ -46,7 +46,7 @@ export async function POST(req) {
 
     // Установка токена в куки
     const response = NextResponse.json({ message: 'Успешно вошли' });
-    response.cookies.set('authToken', accessToken);
+    response.cookies.set('authToken', accessToken, {  maxAge: 3600 });
 
     return response;
   } catch (error) {

@@ -123,6 +123,8 @@ button:disabled {
 }
 .react-tel-input .country-list{
   background-color: #101239 !important;
+  top: -125px !important;
+  max-height: 250px !important;
 }
 .country{
   display: flex !important;
@@ -144,4 +146,7 @@ button:disabled {
 .react-tel-input .country-list{
   width: 350px !important;
   box-shadow: none !important;
+}
+div:where(.swal2-container) .swal2-html-container{
+  padding: 0 !important;
 }

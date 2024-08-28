@@ -5,8 +5,6 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   try {
     const { username, phone = '', password, is_admin } = await req.json();
-
-    // Проверяем, существует ли запись с данным именем и телефоном
     const { rows: existingUser } = await pool.query(
       'SELECT * FROM users WHERE name = $1 AND phone = $2',
       [username, phone]

@@ -7,7 +7,7 @@ let isVideoFinished = false;
 
 const clients = []; 
 
-export async function GET(req) {
+export async function GET() {
   const client = await pool.connect();
   try {
     // Получаем startTime, scenarioId и video_duration из базы данных
@@ -94,7 +94,6 @@ export async function GET(req) {
             `;
             await taskClient.query(saveQuery, [JSON.stringify(messages)]);
 
-            console.log('Сообщения успешно сохранены в архив.');
 
             // Установка таймера на удаление сообщений через час
             schedule.scheduleJob('clearMessages', new Date(Date.now() + 3600000), async () => {

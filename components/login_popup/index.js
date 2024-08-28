@@ -10,7 +10,6 @@ const UserLogin = ({streamEndSeconds, unblockedChat}) => {
   const [phone, setPhone] = useState('');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-  console.log(streamEndSeconds);
   
   const handleSubmit = async (event) => {
     event.preventDefault();
